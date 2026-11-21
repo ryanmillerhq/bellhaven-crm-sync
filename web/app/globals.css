@@ -1,0 +1,156 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Theme tokens borrowed from zenith-web-app (src/app/globals.css): neutral light, hue-295 dark (the brand look). */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0.003 295);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.55 0.25 295);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.96 0.01 295);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.96 0.008 295);
+  --muted-foreground: oklch(0.52 0.01 295);
+  --accent: oklch(0.95 0.02 295);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.91 0.01 295);
+  --input: oklch(0.91 0.01 295);
+  --ring: oklch(0.55 0.25 295);
+  --success: oklch(0.6 0.15 155);
+  --warning: oklch(0.72 0.16 70);
+}
+
+.dark {
+  --background: oklch(0.145 0.01 295);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0.015 295);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0.015 295);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.65 0.25 295);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.269 0.03 295);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0.02 295);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.3 0.06 295);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.45 0.08 295 / 55%);
+  --input: oklch(0.45 0.08 295 / 50%);
+  --ring: oklch(0.65 0.25 295);
+  --success: oklch(0.72 0.17 155);
+  --warning: oklch(0.8 0.16 75);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scrollbar-gutter: stable;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ---------- motion (from zenith-web-app, trimmed) ---------- */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes flash-highlight {
+  0% { background-color: oklch(0.8 0.16 75 / 0%); }
+  30% { background-color: oklch(0.8 0.16 75 / 22%); }
+  100% { background-color: oklch(0.8 0.16 75 / 8%); }
+}
+@keyframes soft-glow {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.65 0.25 295 / 0%); }
+  50% { box-shadow: 0 0 24px 2px oklch(0.65 0.25 295 / 28%); }
+}
+
+@layer utilities {
+  .animate-fade-in-up {
+    animation: fade-in-up 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-flash-highlight {
+    animation: flash-highlight 1.4s ease-out both;
+  }
+  .animate-soft-glow {
+    animation: soft-glow 2.4s ease-in-out 2;
+  }
+  /* Hover lift for cards and rows: 1–2px rise + deeper shadow. */
+  .lift {
+    transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms ease, border-color 180ms ease;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -12px oklch(0.3 0.1 295 / 35%);
+  }
+  .press {
+    transition: transform 120ms ease;
+  }
+  .press:active {
+    transform: scale(0.98);
+  }
+  .bg-grid {
+    background-image: radial-gradient(oklch(0.65 0.25 295 / 10%) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-flash-highlight,
+  .animate-soft-glow {
+    animation: none !important;
+    opacity: 1;
+  }
+  .lift:hover {
+    transform: none;
+  }
+  .press:active {
+    transform: none;
+  }
+}
