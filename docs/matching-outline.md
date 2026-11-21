@@ -34,14 +34,15 @@ CRM 121 accounts ────┘                                              �
 
   | Signal | Strength | Notes |
   |---|---|---|
-  | Street (normalized) + zip equal | **Strong**: decisive | 33 of 35 locations hit at least one account this way |
+  | Street (normalized) + state + (zip **or** city) equal | **Strong**: decisive | 30 of 35 locations hit an account this way (Portsmouth via city, since its CRM zip has a typo); Ashtabula (PO Box) and the 4 creates don't |
   | Administrator on site = an Administrator contact on the account | Strong, supporting | e.g. Owosso: Gloria Lambert |
   | Phone equal | Supporting | Only ~half of CRM phones match the site, so used as evidence only |
   | Name similarity ≥ 90 | Supporting | Never sufficient alone |
   | Same city/state/zip | Gate | A candidate must share the state and the zip or city |
 
 - **Match rule:** address match, **OR** (zip/city gate passes **AND** at least 2 of {administrator, phone,
-  name ≥ 90}).
+  name ≥ 90}). Name similarity uses token-sort (not token-set) and ignores the brand word "Bellhaven", so subset
+  names ("Bellhaven of Carlisle" vs "…of New Carlisle") can't score high. The state gate is never relaxed.
   - That second path catches **Ashtabula**, whose CRM billing street is "PO Box 517" but zip, phone and name all match.
   - Confidence: High = address + ≥1 supporting signal. Medium = address only, or the non-address path.
 
@@ -92,8 +93,8 @@ untouched: marking a duplicate isn't a re-parent, so the SOP isn't triggered.
 The executor re-checks revenue/AR at approval time. If the branch would flip, the case goes **stale** instead of
 writing.
 
-**Decoys I'll make sure we don't trip on:** Akron (rev $101k / AR $9k), Defiance, Meadville and New Carlisle all
-have revenue and AR but are **already under Bellhaven**. No parent move means no CHOW.
+**Decoys I'll make sure we don't trip on:** Akron (rev $101k / AR $9k), Defiance ($66k / $9.5k) and Meadville
+($87k / $1k) have revenue AND open AR but are **already under Bellhaven**. No parent move means no CHOW.
 
 ## 8. Field policy
 - **Synced from the site:** name, parent, billing street/city/state/zip, and care_type (only when the CRM value
@@ -158,3 +159,32 @@ have revenue and AR but are **already under Bellhaven**. No parent move means no
   rejected) are never re-proposed. Approved changes simply stop showing up, because the CRM now matches.
 - **Live change:** every threshold, the survivor order, the field policy (`SYNC_PHONE`, `COSMETIC_RENAMES`) and
   the normalization maps live in one `RULES` block in `pipeline/rules.py`. Most likely live edits are one-line changes.
+
+## 12. Changes after the adversarial review (2026-11-21)
+Three independent reviewer agents attacked this design: an independent end-state audit (derived its own answer
+before reading this doc), a rules-lawyer read of the instructions, and an edge-case breaker. The independent audit
+reached **the same end state for all 35 locations and all 3 sweep accounts**. The only difference was the
+Kettering survivor, a deterministic coin-flip that is now labeled as such in the case reasoning. Changes made:
+
+- **Settled records are excluded from matching** (`duplicate_of_account` or `chow_current_account` set). After a
+  CHOW, the old and new accounts share an address but are not re-flagged as duplicates. Covered by the lifecycle
+  test (apply every case, re-run → 0 cases).
+- **CHOW predecessors in duplicate clusters:** a record under another parent with billing history AND open AR is
+  never marked duplicate/Inactive. It's linked to the survivor via `chow_current_account`, and survivor selection
+  runs over the remaining records.
+- **Sold, with revenue but no AR → re-parent per the SOP** (the record with history survives; the new owner's
+  bare record becomes its duplicate). Previously it would have been marked a duplicate.
+- **Field-level decision memory:** a field change that was approved or rejected is never proposed again, even
+  inside a differently-shaped bundle (e.g. after the reviewer edits a name before approving). It returns only if
+  the website's value changes.
+- **Busy facilities are held:** no new proposal for a facility whose case is mid-apply or failed, so a half-applied
+  CHOW can't spawn a bogus duplicate case.
+- **Fingerprints never include notes or dates** (tested across two days).
+- **Scrape collapse guard:** the sweep and superseding also switch off if a scrape finds fewer than 90% of the last
+  good run's communities.
+- **Ashtabula PO Box → an optional case** (low confidence, "policy default: keep → Reject"), so the decision is
+  visible and reviewable instead of silent. Decision #3 is unchanged in effect.
+- **In-sync rows flag stale Administrator contacts** (Wooster, Saline, Sycamore Ridge, Lima). Contacts aren't
+  synced; that's on the roadmap.
+- **Sandusky** gets an explanatory note on the Millstone account, since decision #7 keeps the old account
+  untouched.
