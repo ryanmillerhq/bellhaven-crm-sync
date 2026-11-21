@@ -16,6 +16,8 @@ const byTitle = (t: string) => {
   if (!c) throw new Error(`no case ${t}`);
   return c;
 };
+/** Real op ids are sequential across a pipeline run (op23, op24, ...), so tests find operations by type. */
+const opId = (c: Case, type: Case["operations"][number]["op"], nth = 0) => c.operations.filter((o) => o.op === type)[nth].id;
 
 beforeEach(() => {
   cases = buildMockCases();
@@ -31,7 +33,7 @@ describe("CHOW (Tiffin)", () => {
 
     expect(outcome).toBe("applied");
     expect(done.status).toBe("applied");
-    const created = done.result!.find((r) => r.op_id === "op1")!.created_id!;
+    const created = done.result!.find((r) => r.op_id === opId(c, "create_account"))!.created_id!;
     expect(created).toMatch(/^001MOCK/);
     expect(crm.accounts.get(created)).toMatchObject({ name: "Bellhaven of Tiffin", parent_id: BELLHAVEN_ID, billing_zip: "44883" });
 
@@ -44,7 +46,7 @@ describe("CHOW (Tiffin)", () => {
 
   it("applies reviewer edits to editable fields only", async () => {
     const c = byTitle("Bellhaven of Tiffin");
-    await approveCase(deps, c.id, { actor, edits: { op1: { name: "Bellhaven of Tiffin (Edited)", parent_id: "HACK" } } });
+    await approveCase(deps, c.id, { actor, edits: { [opId(c, "create_account")]: { name: "Bellhaven of Tiffin (Edited)", parent_id: "HACK" } } });
     const post = crm.writes.find((w) => w.method === "POST")!;
     expect(post.body).toMatchObject({ name: "Bellhaven of Tiffin (Edited)", parent_id: BELLHAVEN_ID });
   });
@@ -87,9 +89,9 @@ describe("partial failure and retry", () => {
     let failures = 1;
     crm.failWhen = (call) => (call.method === "PATCH" && failures-- > 0 ? new Error("CRM PATCH → 503") : null);
 
-    const first = await approveCase(deps, c.id, { actor, edits: { op1: { name: "Bellhaven of Tiffin" } } });
+    const first = await approveCase(deps, c.id, { actor, edits: { [opId(c, "create_account")]: { name: "Bellhaven of Tiffin" } } });
     expect(first.outcome).toBe("failed");
-    expect(first.case.result!.map((r) => [r.op_id, r.ok])).toEqual([["op1", true], ["op2", false]]);
+    expect(first.case.result!.map((r) => [r.op_id, r.ok])).toEqual([[opId(c, "create_account"), true], [opId(c, "update_account"), false]]);
     const created = first.case.result![0].created_id!;
 
     const retry = await approveCase(deps, c.id, { actor });
@@ -127,7 +129,9 @@ describe("audit identity", () => {
   it("suffixes every note it writes into the CRM with who approved it and how", async () => {
     const lima = byTitle("Bellhaven Crossings of Lima");
     await approveCase(deps, lima.id, { actor: { name: "Ryan Miller (via Claude MCP)", via: "mcp" } });
-    expect(crm.accounts.get("001LGFPBJY4N9MB6KL")!.note).toMatch(/Re-parented from Harborview .*\. Approved by Ryan Miller \(via Claude MCP\) via mcp\.$/);
+    const limaNote = crm.accounts.get("001LGFPBJY4N9MB6KL")!.note;
+    expect(limaNote).toMatch(/^\[bellhaven-sync 2026-11-21\] /);
+    expect(limaNote.endsWith(" Approved by Ryan Miller (via Claude MCP) via mcp.")).toBe(true);
 
     const tiffin = byTitle("Bellhaven of Tiffin");
     await approveCase(deps, tiffin.id, { actor: ryan });

@@ -126,11 +126,14 @@ export interface CaseEvent {
 export interface MatchResult {
   subject_key: string;
   name: string;
-  classification: "in_sync" | "case";
+  /** in_sync = nothing to change · case = a pending case exists · decided = its changes were already decided in review */
+  classification: "in_sync" | "case" | "decided";
   account_id: string | null;
   account_name: string | null;
   confidence: string | null;
   signals: string[];
+  /** Informational observations that don't produce a change, e.g. "Administrator contact differs: …" */
+  notes?: string[];
 }
 
 export interface Run {
