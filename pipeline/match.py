@@ -20,6 +20,7 @@ class Signals:
     phone: bool
     name_similarity: int
     street_exact: bool  # street written exactly like the site (tie-breaker only)
+    po_box: bool = False  # CRM street is a PO Box, so address can never match
 
     def supporting(self) -> list[str]:
         out = []
@@ -34,6 +35,8 @@ class Signals:
     def is_match(self) -> bool:
         if self.address:
             return True
+        if self.gate and self.po_box and self.name_similarity == 100:
+            return True  # PO Box account: same locality + identical name is enough (phone/admin can drift)
         return self.gate and len(self.supporting()) >= rules.MIN_SUPPORTING_SIGNALS
 
     def labels(self) -> list[str]:
@@ -96,6 +99,7 @@ def compute_signals(loc: Location, account: dict, contacts: list[dict]) -> Signa
         phone=bool(phone_key(loc.phone)) and phone_key(account.get("phone")) == phone_key(loc.phone),
         name_similarity=name_similarity(loc.name, account.get("name"), drop=rules.BRAND_TOKENS),
         street_exact=(account.get("billing_street") or "").strip().lower() == loc.street.strip().lower(),
+        po_box=is_po_box(account.get("billing_street")),
     )
 
 

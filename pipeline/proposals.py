@@ -33,7 +33,9 @@ def fingerprint(kind: str, subject: str, operations: list[dict]) -> str:
     canon = []
     for op in operations:
         if op["op"] in ("create_account", "update_account"):
-            fields = {k: v for k, v in op["fields"].items() if k != "note"}
+            # phone on a create is carried along, not the decision (and websites change numbers): not identity
+            fields = {k: v for k, v in op["fields"].items()
+                      if k != "note" and not (op["op"] == "create_account" and k == "phone")}
             canon.append([op["op"], op.get("account_id") or op.get("ref"), sorted(fields.items(), key=lambda kv: kv[0])])
     blob = json.dumps([kind, subject, sorted(canon, key=json.dumps)], sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()
@@ -185,9 +187,9 @@ class CaseBuilder:
     def survivor_key(self, cand: Candidate, loc: Location):
         a = cand.account
         billing = (a.get("lifetime_revenue") or 0) > 0 or (a.get("outstanding_ar") or 0) > 0
-        return (not billing, a.get("parent_id") != self.operator_id, not cand.signals.administrator,
-                not cand.signals.phone, -len(self.contacts(a["account_id"])), not cand.signals.street_exact,
-                a["account_id"])
+        return (not billing, a.get("parent_id") != self.operator_id, a.get("status") != "Active",
+                not cand.signals.administrator, not cand.signals.phone, -len(self.contacts(a["account_id"])),
+                not cand.signals.street_exact, a["account_id"])
 
     # ---------- per-location cases ----------
     def needs_chow(self, c: Candidate) -> bool:
@@ -350,6 +352,10 @@ class CaseBuilder:
             reasoning.append(f"“{a['name']}” ({self.parent_name(a)}) is the same facility but carries billing history "
                              f"({money(a.get('lifetime_revenue'))}) AND open AR ({money(a.get('outstanding_ar'))}), so "
                              f"per the CHOW SOP it is preserved and linked, not marked duplicate.")
+        if losers or predecessors:
+            # Whatever the losers/predecessors will point at must still be a live, unsettled record at approval time.
+            if not chow_created:
+                preconds += self.preconditions_for(t, ["duplicate_of_account", "chow_current_account"])
         if losers:
             names = ", ".join(f"“{c.account['name']}” ({self.parent_name(c.account)})" for c in losers)
             reasoning.insert(1, f"{len(lm.matches)} CRM accounts sit at this address. Keeping "
@@ -536,7 +542,7 @@ class CaseBuilder:
 
     def _survivor_reason(self, s: Candidate, losers: list[Candidate], loc: Location) -> str:
         """The rule that actually decided it: the first survivor-key position where the survivor beats the runner-up."""
-        reasons = ["it carries the billing history", f"already under {self.operator_name}",
+        reasons = ["it carries the billing history", f"already under {self.operator_name}", "it is the Active record",
                    "its contact is the website's administrator", "its phone matches the website",
                    "it has the most contacts", "its street matches the website exactly",
                    "tie broken by lowest account id (all other rules equal)"]
