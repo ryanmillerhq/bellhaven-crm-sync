@@ -41,7 +41,7 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [whoOpen, setWhoOpen] = useState(false);
   const [focusId, setFocusId] = useState<number | null>(null);
-  const pendingWrites = useRef(new Map<number, { timer: number; edits: Edits; note: string | null }>());
+  const pendingWrites = useRef(new Map<number, { timer: number; edits: Edits; note: string | null; version: string | null }>());
 
   // First visit (local, no passcode): ask who's reviewing. Hosted viewers aren't nagged; they're asked on unlock.
   useEffect(() => {
@@ -87,9 +87,10 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
 
   const report = useCallback((c: Case, res: ActionResult, toastId?: string | number) => {
     if (!res.ok) {
-      toast.error(res.error, { id: toastId });
+      toast.error(res.refreshed ? `Refreshed · ${c.title}` : res.error, { id: toastId, description: res.refreshed ? res.error : undefined, duration: res.refreshed ? 9000 : undefined });
       if (res.needsReviewer || res.locked) setWhoOpen(true);
       setOptimistic((o) => { const n = { ...o }; delete n[c.id]; return n; });
+      if (res.refreshed) { setDir(-1); setFocusId(c.id); } // bring the updated case back for re-review
       return;
     }
     const created = (res.case.result ?? []).filter((r) => r.created_id).map((r) => r.created_id);
@@ -105,7 +106,7 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
   const commitApprove = useCallback(async (c: Case, e: Edits, note: string | null) => {
     pendingWrites.current.delete(c.id);
     const id = toast.loading(`Applying ${c.title}…`, { description: `${c.operations.length} step(s) to the CRM` });
-    report(c, await approveAction(c.id, e, note), id);
+    report(c, await approveAction(c.id, e, note, c.updated_at ?? null), id);
     router.refresh();
   }, [report, router]);
 
@@ -116,7 +117,7 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
     setDir(1);
     setOptimistic((o) => ({ ...o, [c.id]: "applied" }));
     const timer = window.setTimeout(() => commitApprove(c, e, note), UNDO_MS);
-    pendingWrites.current.set(c.id, { timer, edits: e, note });
+    pendingWrites.current.set(c.id, { timer, edits: e, note, version: c.updated_at ?? null });
     toast(`Approving ${c.title}`, {
       id: `undo-${c.id}`, duration: UNDO_MS,
       description: `${c.operations.length} step${c.operations.length === 1 ? "" : "s"} will run in ${UNDO_MS / 1000}s`,
@@ -160,7 +161,7 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
         fetch(`/api/cases/${id}/approve`, {
           method: "POST", keepalive: true,
           headers: { "content-type": "application/json", "x-review-via": "ui", "x-reviewer": reviewer?.label ?? "" },
-          body: JSON.stringify({ edits: p.edits, note: p.note }),
+          body: JSON.stringify({ edits: p.edits, note: p.note, expected_updated_at: p.version }),
         });
       }
       pendingWrites.current.clear();
@@ -188,7 +189,7 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
   const retry = async (c: Case) => {
     if (!ensureCanAct()) return;
     const id = toast.loading(`Retrying ${c.title}…`);
-    report(c, await approveAction(c.id, {}, c.decision_note), id);
+    report(c, await approveAction(c.id, {}, c.decision_note, c.updated_at ?? null), id);
     router.refresh();
   };
   const reopen = async (c: Case) => {

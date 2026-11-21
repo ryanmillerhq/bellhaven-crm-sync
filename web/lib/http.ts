@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { actorFromRequest, canWrite } from "./auth";
 import { CrmError } from "./crm";
-import { CaseConflict, CaseNotFound } from "./executor";
+import { CaseConflict, CaseNotFound, CaseRefreshed } from "./executor";
 import type { Actor } from "./types";
 
 export const json = (body: unknown, status = 200) =>
@@ -10,7 +10,8 @@ export const json = (body: unknown, status = 200) =>
 
 export function errorResponse(e: unknown) {
   if (e instanceof CaseNotFound) return json({ error: e.message }, 404);
-  if (e instanceof CaseConflict) return json({ error: e.message }, 409);
+  if (e instanceof CaseRefreshed) return json({ error: e.message, code: "refreshed" }, 409);
+  if (e instanceof CaseConflict) return json({ error: e.message, code: "conflict" }, 409);
   if (e instanceof CrmError) return json({ error: e.message, status: e.status }, 502);
   console.error(e);
   return json({ error: e instanceof Error ? e.message : "Unexpected error" }, 500);

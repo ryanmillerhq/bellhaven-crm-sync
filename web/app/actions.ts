@@ -5,12 +5,12 @@ import {
   canWrite, endSession, getReviewer, normalizeReviewer, passcodeRequired, reviewerLabel, setReviewer, startSession,
 } from "@/lib/auth";
 import { approve, reject, reopen } from "@/lib/cases";
-import { CaseConflict, CaseNotFound, type Outcome } from "@/lib/executor";
+import { CaseConflict, CaseNotFound, CaseRefreshed, type Outcome } from "@/lib/executor";
 import type { Actor, Case, Edits } from "@/lib/types";
 
 export type ActionResult =
   | { ok: true; outcome?: Outcome; case: Case }
-  | { ok: false; error: string; locked?: boolean; needsReviewer?: boolean };
+  | { ok: false; error: string; locked?: boolean; needsReviewer?: boolean; refreshed?: boolean };
 
 async function guarded(fn: (actor: Actor) => Promise<{ case: Case; outcome?: Outcome }>): Promise<ActionResult> {
   if (!(await canWrite())) return { ok: false, locked: true, error: "Enter the review passcode to make decisions." };
@@ -19,6 +19,7 @@ async function guarded(fn: (actor: Actor) => Promise<{ case: Case; outcome?: Out
   try {
     return { ok: true, ...(await fn({ name: reviewerLabel(reviewer), via: "ui" })) };
   } catch (e) {
+    if (e instanceof CaseRefreshed) return { ok: false, refreshed: true, error: e.message };
     if (e instanceof CaseConflict || e instanceof CaseNotFound) return { ok: false, error: e.message };
     console.error(e);
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" };
@@ -27,8 +28,9 @@ async function guarded(fn: (actor: Actor) => Promise<{ case: Case; outcome?: Out
   }
 }
 
-export async function approveAction(id: number, edits: Edits, note: string | null) {
-  return guarded((actor) => approve(id, { edits, note, actor }));
+/** `expectedUpdatedAt` = the version the reviewer looked at; a case refreshed since then is not executed. */
+export async function approveAction(id: number, edits: Edits, note: string | null, expectedUpdatedAt: string | null) {
+  return guarded((actor) => approve(id, { edits, note, actor, expectedUpdatedAt }));
 }
 
 export async function rejectAction(id: number, reason: string | null) {

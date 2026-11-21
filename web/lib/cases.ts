@@ -66,7 +66,8 @@ export async function getDashboard(): Promise<Dashboard> {
   return { cases, events, progress: computeProgress(cases), runs, mode: dataMode() };
 }
 
-export const approve = (id: number, opts: { edits?: Edits; note?: string | null; actor: Actor }) => approveCase(deps(), id, opts);
+export const approve = (id: number, opts: { edits?: Edits; note?: string | null; actor: Actor; expectedUpdatedAt?: string | null }) =>
+  approveCase(deps(), id, opts);
 export const reject = (id: number, opts: { reason?: string | null; actor: Actor }) => rejectCase(deps(), id, opts);
 export const reopen = (id: number, opts: { actor: Actor }) => reopenCase(deps(), id, opts);
 
