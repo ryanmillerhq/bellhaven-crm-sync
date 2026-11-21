@@ -5,3 +5,7 @@ python-dotenv==1.2.4
 RapidFuzz==3.14.6
 psycopg[binary]==3.3.9
 pytest==9.2.0
+
+# MCP server (mcp_server/): FastMCP from the official SDK's 1.x line (2.x renamed it MCPServer and moved to httpx2).
+mcp==1.30.0
+httpx==0.28.1
