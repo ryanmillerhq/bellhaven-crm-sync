@@ -34,6 +34,14 @@ describe("write routes require x-reviewer", () => {
     expect(c).toMatchObject({ status: "rejected", decided_by: "Ryan Miller (via Claude MCP)", decided_via: "mcp" });
   });
 
+  it("answers 409 code=refreshed when the reviewed version is outdated, and executes nothing", async () => {
+    const res = await call("approve", 4, { "x-reviewer": "Ryan" }, { expected_updated_at: "2000-01-01T00:00:00.000Z" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "refreshed" });
+    const { deps } = await import("@/lib/cases");
+    expect((await deps().store.get(4))!.status).toBe("pending");
+  });
+
   it("still enforces the passcode (401) before the reviewer check when one is configured", async () => {
     process.env.REVIEW_PASSCODE = "s3cret";
     try {
