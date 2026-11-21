@@ -190,6 +190,40 @@ class CaseBuilder:
                 a["account_id"])
 
     # ---------- per-location cases ----------
+    def needs_chow(self, c: Candidate) -> bool:
+        a = c.account
+        return a.get("parent_id") != self.operator_id and rules.sop_requires_chow(a.get("lifetime_revenue"),
+                                                                                a.get("outstanding_ar"))
+
+    def location_cases(self, lm: LocationMatch) -> tuple[list[dict], dict]:
+        """Main case for the location, plus an optional PO Box case when policy is to flag it."""
+        case, mr = self.location_case(lm)
+        cases = [case] if case else []
+        po = self.po_box_case(lm)
+        if po:
+            cases.append(po)
+            mr = {**mr, "notes": mr.get("notes", []) + ["PO Box billing street flagged as an optional case"]}
+        return cases, mr
+
+    def po_box_case(self, lm: LocationMatch) -> dict | None:
+        if rules.PO_BOX_STREETS != "flag" or len(lm.matches) != 1:
+            return None
+        loc, t = lm.location, lm.matches[0].account
+        if not is_po_box(t.get("billing_street")) or street_key(t.get("billing_street")) == street_key(loc.street):
+            return None
+        ops = [self.update(t["account_id"], {"billing_street": loc.street},
+                           f"Replace billing street “{t['billing_street']}” with the website's physical address",
+                           ["billing_street"])]
+        reasoning = [f"Matched to “{t['name']}” ({t['account_id']}) on {' + '.join(lm.matches[0].signals.labels())}.",
+                     f"CRM billing street is a PO Box (“{t['billing_street']}”); the website shows the physical "
+                     f"address {loc.street}.",
+                     "Policy: a PO Box is a legitimate billing address, so the default is to keep it (Reject). "
+                     "Approve only if billing confirms the physical address should replace it."]
+        return self._case("field_fix", ["field_fix", "po_box", "optional"], f"site:{loc.slug}:po-box", loc.name,
+                          "Optional: PO Box billing address (policy default: keep it)", reasoning, loc,
+                          [self.case_account("target", t, lm.matches[0].signals.labels())], self.evidence(loc, t),
+                          None, "low", ops, self.preconditions_for(t, ["billing_street"]))
+
     def location_case(self, lm: LocationMatch) -> tuple[dict | None, dict]:
         loc = lm.location
         subject = f"site:{loc.slug}"
@@ -198,9 +232,16 @@ class CaseBuilder:
             return case, {"subject_key": subject, "name": loc.name, "classification": "case", "account_id": None,
                           "account_name": None, "confidence": case["confidence"], "signals": []}
 
-        ranked = sorted(lm.matches, key=lambda c: self.survivor_key(c, loc))
+        # Records under another parent with billing history AND open AR must stay exactly as they are (CHOW SOP):
+        # when another record can represent the facility, they're linked to it as predecessors, never marked
+        # duplicate/Inactive. If every record is like that, the normal CHOW branch creates the new account.
+        predecessors = [c for c in lm.matches if self.needs_chow(c)] if len(lm.matches) > 1 else []
+        candidates = [c for c in lm.matches if c not in predecessors] or lm.matches
+        if len(candidates) == len(lm.matches):
+            predecessors = []
+        ranked = sorted(candidates, key=lambda c: self.survivor_key(c, loc))
         survivor, losers = ranked[0], ranked[1:]
-        billed = [c for c in lm.matches if (c.account.get("lifetime_revenue") or 0) > 0 or (c.account.get("outstanding_ar") or 0) > 0]
+        billed = [c for c in candidates if (c.account.get("lifetime_revenue") or 0) > 0 or (c.account.get("outstanding_ar") or 0) > 0]
         if losers and len(billed) > 1:
             return self.ambiguous_duplicate_case(lm), self._mr(subject, loc, survivor, "case")
 
@@ -297,27 +338,39 @@ class CaseBuilder:
                         ops.append({"id": self._op_id(), "op": "move_contact", "contact_id": ct["contact_id"],
                                     "to_account_id": current_ref,
                                     "describe": f"Move contact {ct['name']} ({ct.get('title') or 'contact'}) to the surviving record"})
+        chow_created = isinstance(current_ref, dict)
+        for p in predecessors:
+            a = p.account
+            tags.append("chow")
+            ops.append(self.update(a["account_id"], {"chow_current_account": current_ref},
+                                   f"Link “{a['name']}” ({self.parent_name(a)}) to the current record "
+                                   f"(chow_current_account); leave everything else on it untouched"))
+            preconds += self.preconditions_for(a, ["parent_id", "lifetime_revenue", "outstanding_ar",
+                                                   "chow_current_account", "duplicate_of_account"])
+            reasoning.append(f"“{a['name']}” ({self.parent_name(a)}) is the same facility but carries billing history "
+                             f"({money(a.get('lifetime_revenue'))}) AND open AR ({money(a.get('outstanding_ar'))}), so "
+                             f"per the CHOW SOP it is preserved and linked, not marked duplicate.")
         if losers:
             names = ", ".join(f"“{c.account['name']}” ({self.parent_name(c.account)})" for c in losers)
             reasoning.insert(1, f"{len(lm.matches)} CRM accounts sit at this address. Keeping "
                                 f"“{t['name']}” ({self._survivor_reason(survivor, losers, loc)}); duplicates: {names}.")
 
-        if parent_move and tags[:1] != ["chow"] or changes or losers or tags[:1] == ["chow"]:
-            if not ops:
-                return None, self._mr(subject, loc, survivor, "in_sync")
-            # append an audit note to the surviving existing record when it is modified (not for CHOW old accounts)
-            if isinstance(current_ref, str) and any(o["op"] == "update_account" and o["account_id"] == t["account_id"] for o in ops):
-                ops.insert(1, self.append_note(t["account_id"], self._audit_text(t, changes, parent_move, losers),
-                                               f"Record what changed in the note on “{loc.name}”"))
-            kind = next(k for k in KIND_PRIORITY if k in tags)
-            accounts = [self.case_account("survivor" if losers else ("old_record" if kind == "chow" else "target"), t,
-                                          survivor.signals.labels())]
-            accounts += [self.case_account("duplicate", c.account, c.signals.labels()) for c in losers]
-            evidence = self.evidence(loc, t) + [r for c in losers for r in self.evidence(loc, c.account, compact=True)]
-            case = self._case(kind, tags, subject, loc.name, self._summary(kind, tags, t, loc), reasoning, loc,
-                              accounts, evidence, sop, survivor.signals.confidence(), ops, preconds)
-            return case, self._mr(subject, loc, survivor, "case")
-        return None, self._mr(subject, loc, survivor, "in_sync")
+        if not ops:
+            return None, self._mr(subject, loc, survivor, "in_sync")
+        # Audit note on the surviving existing record when it is modified (never on a CHOW old account).
+        if not chow_created and any(o["op"] == "update_account" and o["account_id"] == t["account_id"] for o in ops):
+            ops.insert(1, self.append_note(t["account_id"], self._audit_text(t, changes, parent_move, losers),
+                                           f"Record what changed in the note on “{loc.name}”"))
+        kind = next(k for k in KIND_PRIORITY if k in tags)
+        role = "survivor" if (losers or predecessors) else ("old_record" if chow_created else "target")
+        accounts = [self.case_account(role, t, survivor.signals.labels())]
+        accounts += [self.case_account("duplicate", c.account, c.signals.labels()) for c in losers]
+        accounts += [self.case_account("old_record", c.account, c.signals.labels()) for c in predecessors]
+        evidence = self.evidence(loc, t) + [r for c in losers + predecessors
+                                            for r in self.evidence(loc, c.account, compact=True)]
+        case = self._case(kind, tags, subject, loc.name, self._summary(kind, tags, t, loc), reasoning, loc,
+                          accounts, evidence, sop, survivor.signals.confidence(), ops, preconds)
+        return case, self._mr(subject, loc, survivor, "case")
 
     def create_case(self, lm: LocationMatch) -> dict:
         loc = lm.location
@@ -383,9 +436,25 @@ class CaseBuilder:
                                         f"(“{a['name']}”, {self.operator_name}) kept for billing per CHOW SOP and linked here.",
                                         f"Note the predecessor on {new_parent}'s account")]
                 kind, tags = "sold", ["sold", "chow"]
+            elif (a.get("lifetime_revenue") or 0) > 0:
+                # Billing history but no open AR: the SOP says re-parent the existing account directly. It keeps the
+                # history, so it survives; the new owner's bare record becomes its duplicate.
+                sop["explanation"] = (f"Billing history ({money(a.get('lifetime_revenue'))}) but no open AR, so per the "
+                                      f"CHOW SOP the existing account is re-parented to {new_parent}. It carries the "
+                                      f"history, so {new_parent}'s bare record at this address becomes its duplicate.")
+                ops = [self.update(a["account_id"], {"parent_id": owner["parent_id"]},
+                                   f"Move “{a['name']}” from {self.operator_name} to {new_parent}"),
+                       self.append_note(a["account_id"], f"No longer a {self.operator_name} community; re-parented to "
+                                        f"{new_parent} (survivor of duplicate {owner['account_id']}).", "Explain in the note"),
+                       self.update(owner["account_id"], {"duplicate_of_account": a["account_id"], "status": "Inactive"},
+                                   f"Mark {new_parent}'s record “{owner['name']}” a duplicate and set it Inactive"),
+                       self.append_note(owner["account_id"], f"Duplicate of {a['account_id']} (same facility, which "
+                                        f"carries the billing history).", "Explain in the note")]
+                preconds += self.preconditions_for(owner, ["duplicate_of_account", "chow_current_account", "status"])
+                kind, tags = "sold", ["sold", "reparent", "duplicate"]
             else:
-                sop["explanation"] = (f"No open billing to preserve, and {new_parent} already has an account here, so the "
-                                      f"old {self.operator_name} record is marked a duplicate of it and set Inactive.")
+                sop["explanation"] = (f"No billing history to preserve, and {new_parent} already has an account here, so "
+                                      f"the old {self.operator_name} record is marked a duplicate of it and set Inactive.")
                 ops = [self.update(a["account_id"], {"duplicate_of_account": owner["account_id"], "status": "Inactive"},
                                    f"Mark “{a['name']}” a duplicate of {new_parent}'s account and set it Inactive"),
                        self.append_note(a["account_id"], f"No longer a {self.operator_name} community; now {new_parent} "
@@ -428,9 +497,15 @@ class CaseBuilder:
         return out
 
     def _mr(self, subject, loc, cand: Candidate, classification) -> dict:
+        notes = []
+        contacts = self.contacts(cand.account["account_id"])
+        admins = [c["name"] for c in contacts if "administrator" in (c.get("title") or "").lower()]
+        if loc.administrator and admins and not cand.signals.administrator:
+            notes.append(f"Administrator contact differs: website {loc.administrator}, CRM {', '.join(admins)} "
+                         f"(contacts aren't synced)")
         return {"subject_key": subject, "name": loc.name, "classification": classification,
                 "account_id": cand.account["account_id"], "account_name": cand.account.get("name"),
-                "confidence": cand.signals.confidence(), "signals": cand.signals.labels()}
+                "confidence": cand.signals.confidence(), "signals": cand.signals.labels(), "notes": notes}
 
     def _describe_update(self, t: dict, fields: dict, from_parent: str | None) -> str:
         parts = []
@@ -475,7 +550,9 @@ class CaseBuilder:
     def _summary(self, kind, tags, t, loc) -> str:
         p = self.parent_name(t)
         return {
-            "chow": f"Change of ownership: still under {p} with open AR (SOP: new account + link)",
+            "chow": (f"Change of ownership: still under {p} with open AR (SOP: new account + link)"
+                     if t.get("parent_id") != self.operator_id else
+                     "Previous owner's record has open AR: preserved and linked to the current record (CHOW SOP)"),
             "duplicate": f"{1 + tags.count('duplicate')}+ CRM records for one facility" +
                          (f"; survivor also moves from {p}" if "reparent" in tags else "") +
                          ("; renamed" if "rename" in tags and "reparent" in tags else ""),
@@ -486,21 +563,95 @@ class CaseBuilder:
         }.get(kind, kind)
 
 
-def build_cases(outcome: MatchOutcome, today: str, scrape_complete: bool) -> tuple[list[dict], list[dict]]:
+def _ref_key(v) -> str:
+    return f"$ref:{v['$ref']}" if isinstance(v, dict) and "$ref" in v else str(v)
+
+
+def _canon(v) -> str:
+    return json.dumps(v, sort_keys=True, default=str)
+
+
+def decided_keys_from_cases(decided_cases: list[dict]) -> frozenset:
+    """Field-level memory of past decisions (approved OR rejected), from each case's ORIGINAL proposed operations.
+
+    Keys: ("create", subject_key) and (account_id, field, proposed value). A field change that was already decided
+    is not proposed again, even inside a differently-shaped bundle, e.g. after the reviewer edited a value before
+    approving, or rejected a bundle. It returns automatically if the website's value changes (a different key).
+    """
+    keys = set()
+    for c in decided_cases:
+        for op in c.get("operations") or []:
+            if op["op"] == "create_account":
+                keys.add(("create", c["subject_key"]))
+            elif op["op"] == "update_account":
+                for k, v in op["fields"].items():
+                    if k != "note":
+                        keys.add((_ref_key(op["account_id"]), k, _canon(v)))
+    return frozenset(keys)
+
+
+def suppress_decided(case: dict, decided: frozenset) -> dict | None:
+    if not decided:
+        return case
+    ops_out, changed, removed_create = [], False, False
+    original_targets = {_ref_key(op["account_id"]) for op in case["operations"] if op["op"] == "update_account"}
+    for op in case["operations"]:
+        if op["op"] == "create_account" and ("create", case["subject_key"]) in decided:
+            changed = removed_create = True
+            continue
+        if op["op"] == "update_account":
+            target = _ref_key(op["account_id"])
+            fields = {k: v for k, v in op["fields"].items() if (target, k, _canon(v)) not in decided}
+            if fields != op["fields"]:
+                changed = True
+                if not fields:
+                    continue
+                op = {**op, "fields": fields, "editable": [f for f in op["editable"] if f in fields]}
+        ops_out.append(op)
+    if not changed:
+        return case
+    if removed_create:
+        ops_out = [op for op in ops_out if "$ref" not in json.dumps(op)]
+    writes = [op for op in ops_out if op["op"] in ("create_account", "update_account")]
+    if not writes:
+        return None
+    kept_targets = {_ref_key(op["account_id"]) for op in writes if op["op"] == "update_account"}
+    ops_out = [op for op in ops_out if op["op"] != "append_note" or _ref_key(op["account_id"]) in kept_targets
+               or _ref_key(op["account_id"]) not in original_targets]
+    fields = {k for op in writes if op["op"] == "update_account" for k in op["fields"]}
+    creates = any(op["op"] == "create_account" for op in writes)
+    drop = {"rename": "name" not in fields, "cosmetic": "name" not in fields, "reparent": "parent_id" not in fields,
+            "duplicate": "duplicate_of_account" not in fields, "reactivate": "status" not in fields,
+            "chow": "chow_current_account" not in fields and not creates,
+            "field_fix": not fields & {"billing_street", "billing_city", "billing_state", "billing_zip", "care_type"}}
+    tags = [t for t in case["tags"] if not drop.get(t, False)] or [case["kind"]]
+    kind = next((k for k in KIND_PRIORITY if k in tags), case["kind"])
+    reasoning = case["reasoning"] + ["Other changes for this facility were already decided in an earlier review "
+                                     "and are not proposed again."]
+    return {**case, "operations": ops_out, "tags": tags, "kind": kind, "reasoning": reasoning,
+            "fingerprint": fingerprint(kind, case["subject_key"], ops_out)}
+
+
+def build_cases(outcome: MatchOutcome, today: str, scrape_complete: bool,
+                decided: frozenset = frozenset()) -> tuple[list[dict], list[dict]]:
     """Returns (cases, match_results). The account sweep only runs on a complete scrape: a page that failed to load
-    must not make live communities look 'no longer listed'."""
+    must not make live communities look 'no longer listed'. `decided` = decided_keys_from_cases(...)."""
     b = CaseBuilder(outcome, today)
     cases, results = [], []
     for lm in outcome.by_location:
-        case, mr = b.location_case(lm)
+        proposed, mr = b.location_cases(lm)
+        kept = [k for k in (suppress_decided(c, decided) for c in proposed) if k]
+        if proposed and not kept and mr["classification"] == "case":
+            mr = {**mr, "classification": "decided"}
         results.append(mr)
-        if case:
-            cases.append(case)
+        cases.extend(kept)
     if scrape_complete:
         for a in outcome.unmatched_operator_accounts:
-            case = b.sweep_case(a)
-            cases.append(case)
-            results.append({"subject_key": case["subject_key"], "name": a["name"], "classification": "case",
-                            "account_id": a["account_id"], "account_name": a["name"], "confidence": case["confidence"],
+            case = suppress_decided(b.sweep_case(a), decided)
+            results.append({"subject_key": f"account:{a['account_id']}", "name": a["name"],
+                            "classification": "case" if case else "decided", "account_id": a["account_id"],
+                            "account_name": a["name"], "confidence": case["confidence"] if case else None,
                             "signals": []})
+            if case:
+                cases.append(case)
     return cases, results

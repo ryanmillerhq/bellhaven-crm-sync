@@ -19,7 +19,8 @@ LOOKALIKE_MIN = 80  # non-matching accounts with names at least this similar are
 PROPOSE_COSMETIC_RENAMES = True  # decision 1: propose the exact website name even for punctuation/spelling variants
 COSMETIC_RENAME_MIN = 90  # names at least this similar (after normalization) are tagged "cosmetic"
 SYNC_PHONE = False  # decision 2: phone is evidence only, never written
-LEAVE_PO_BOX_STREETS = True  # decision 3: a PO Box billing street is legitimate; don't overwrite it
+LEAVE_PO_BOX_STREETS = True  # decision 3: a PO Box billing street is legitimate; never bundled into another fix
+PO_BOX_STREETS = "flag"  # "flag": separate optional case the reviewer can reject (default: keep) | "leave": silent
 SYNC_CARE_TYPE = True  # only when the CRM care_type isn't one of the site's offerings
 
 # --- outcomes --------------------------------------------------------------------------------------------------------
@@ -52,3 +53,8 @@ CARE_TYPE_MAP = {
 }
 
 NOTE_TAG = "bellhaven-sync"
+
+# --- scrape sanity ------------------------------------------------------------------------------------------------
+# A scrape is "complete" (safe to conclude absence) only if no page failed, it meets the homepage's own count, and it
+# isn't a collapse versus the last good run (small legitimate drops still pass).
+MIN_SCRAPE_RATIO_VS_LAST_RUN = 0.9
