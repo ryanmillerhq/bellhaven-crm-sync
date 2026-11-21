@@ -39,7 +39,7 @@ describe("CHOW (Tiffin)", () => {
     expect(old.chow_current_account).toBe(created);
     expect(old.parent_id).toBe("001FWSQ30SFW6S7604"); // still Cedar Trail, per SOP
     expect(crm.writes.map((w) => `${w.method} ${w.path}`)).toEqual(["POST /accounts", "PATCH /accounts/001U6RW32TY0WSXZZB"]);
-    expect((await store.events(c.id)).map((e) => e.event)).toEqual(["approved", "applied"]);
+    expect((await store.events(c.id)).map((e) => e.event)).toEqual(["claimed", "approved", "op_applied", "op_applied", "applied"]);
   });
 
   it("applies reviewer edits to editable fields only", async () => {
@@ -96,7 +96,43 @@ describe("partial failure and retry", () => {
     expect(retry.outcome).toBe("applied");
     expect(crm.writes.filter((w) => w.method === "POST")).toHaveLength(1);
     expect(crm.accounts.get("001U6RW32TY0WSXZZB")!.chow_current_account).toBe(created);
-    expect((await store.events(c.id)).map((e) => e.event)).toEqual(["approved", "failed", "retry", "applied"]);
+    expect((await store.events(c.id)).map((e) => e.event)).toEqual(
+      ["claimed", "approved", "op_applied", "op_failed", "failed", "claimed", "retry", "op_applied", "applied"]);
+  });
+});
+
+describe("audit identity", () => {
+  const ryan = { name: "Ryan Miller (ryan@example.com)", via: "ui" as const };
+
+  it("stamps the reviewer on the case, every event and every operation result when approving", async () => {
+    const c = byTitle("Bellhaven of Tiffin");
+    const { case: done } = await approveCase(deps, c.id, { actor: ryan, note: "SOP checked" });
+    expect(done).toMatchObject({ decided_by: ryan.name, decided_via: "ui", decision_note: "SOP checked" });
+    for (const r of done.result!) expect(r).toMatchObject({ actor: ryan.name, via: "ui", at: expect.any(String) });
+    const events = await store.events(c.id);
+    expect(events.length).toBeGreaterThan(0);
+    for (const e of events) expect(e).toMatchObject({ actor: ryan.name, via: "ui" });
+  });
+
+  it("stamps the reviewer when rejecting and reopening", async () => {
+    const c = byTitle("Bellhaven of Batavia");
+    const rejected = await rejectCase(deps, c.id, { actor: { name: "Ryan Miller", via: "mcp" }, reason: "dup of a pending create" });
+    expect(rejected).toMatchObject({ decided_by: "Ryan Miller", decided_via: "mcp" });
+    await reopenCase(deps, c.id, { actor: ryan });
+    expect((await store.events(c.id)).map((e) => [e.event, e.actor, e.via])).toEqual([
+      ["rejected", "Ryan Miller", "mcp"], ["reopened", ryan.name, "ui"],
+    ]);
+  });
+
+  it("suffixes every note it writes into the CRM with who approved it and how", async () => {
+    const lima = byTitle("Bellhaven Crossings of Lima");
+    await approveCase(deps, lima.id, { actor: { name: "Ryan Miller (via Claude MCP)", via: "mcp" } });
+    expect(crm.accounts.get("001LGFPBJY4N9MB6KL")!.note).toMatch(/Re-parented from Harborview .*\. Approved by Ryan Miller \(via Claude MCP\) via mcp\.$/);
+
+    const tiffin = byTitle("Bellhaven of Tiffin");
+    await approveCase(deps, tiffin.id, { actor: ryan });
+    const post = crm.writes.find((w) => w.method === "POST")!.body as { note: string };
+    expect(post.note.endsWith(`Approved by ${ryan.name} via ui.`)).toBe(true);
   });
 });
 
