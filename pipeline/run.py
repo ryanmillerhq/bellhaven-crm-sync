@@ -8,11 +8,12 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import rules
 from .config import get_settings
 from .crm import ReadOnlyCRM
 from .match import match
 from .models import Location, ScrapeReport
-from .proposals import build_cases
+from .proposals import build_cases, decided_keys_from_cases
 
 log = logging.getLogger(__name__)
 
@@ -41,10 +42,28 @@ def run_pipeline(*, trigger: str = "manual", dry_run: bool = False, scrape_file:
         crm = ReadOnlyCRM(settings.crm_base_url, settings.crm_api_token)
         accounts, contacts = crm.accounts(), crm.contacts()
 
+        # Past decisions + last good scrape size come from the store (read-only here; dry runs use them too).
+        decided_cases, last_good = [], None
+        reader = store
+        if reader is None and settings.database_url:
+            from .store import Store
+            reader = Store(settings.database_url)
+        if reader is not None:
+            decided_cases, last_good = reader.decided_cases(), reader.last_good_location_count()
+            if reader is not store:
+                reader.close()
+        complete = report.complete and (last_good is None
+                                        or len(locations) >= rules.MIN_SCRAPE_RATIO_VS_LAST_RUN * last_good)
+        if report.complete and not complete:
+            log.warning("scrape found %d communities vs %d last good run; treating as incomplete",
+                        len(locations), last_good)
+
         outcome = match(locations, accounts, contacts)
-        cases, match_results = build_cases(outcome, today, scrape_complete=report.complete)
+        cases, match_results = build_cases(outcome, today, scrape_complete=complete,
+                                           decided=decided_keys_from_cases(decided_cases))
         summary = {
-            "scrape": report.to_dict(),
+            "scrape": {**report.to_dict(), "complete": complete, "last_good_count": last_good},
+            "decided_keys": len(decided_keys_from_cases(decided_cases)),
             "cases_by_kind": dict(Counter(c["kind"] for c in cases)),
             "case_count": len(cases),
             "in_sync": sum(1 for m in match_results if m["classification"] == "in_sync"),
@@ -52,7 +71,7 @@ def run_pipeline(*, trigger: str = "manual", dry_run: bool = False, scrape_file:
             "contacts_read": len(contacts),
         }
         if store:
-            summary["store"] = store.sync_cases(run_id, cases, allow_supersede=report.complete)
+            summary["store"] = store.sync_cases(run_id, cases, allow_supersede=complete)
             store.finish_run(run_id, status="succeeded", summary=summary,
                              scrape_snapshot=[loc.to_dict() for loc in locations], match_results=match_results,
                              location_count=len(locations), account_count=len(accounts))

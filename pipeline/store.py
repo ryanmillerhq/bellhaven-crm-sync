@@ -42,19 +42,26 @@ class SyncPlan:
                 "superseded": len(self.supersede)}
 
 
-def plan_sync(existing: dict[str, tuple[int, str]], proposed: list[dict], allow_supersede: bool = True) -> SyncPlan:
-    """existing: fingerprint → (case id, status) for every stored case. proposed: today's cases (with fingerprints)."""
+def plan_sync(existing: dict[str, tuple], proposed: list[dict], allow_supersede: bool = True) -> SyncPlan:
+    """existing: fingerprint → (case id, status[, subject_key]) for every stored case. proposed: today's cases.
+
+    A facility whose case is mid-apply or failed is "busy": no new proposal for it until that case is resolved,
+    so a half-applied CHOW (new account created, link not yet written) can't spawn a bogus duplicate case."""
     plan = SyncPlan()
     seen: set[str] = set()
+    busy = {v[2] for v in existing.values() if len(v) > 2 and v[1] in LEAVE}
     for case in proposed:
         fp = case["fingerprint"]
         if fp in seen:
             continue
         seen.add(fp)
         if fp not in existing:
-            plan.insert.append(case)
+            if case.get("subject_key") in busy:
+                plan.left_alone.append(fp)
+            else:
+                plan.insert.append(case)
             continue
-        case_id, status = existing[fp]
+        case_id, status = existing[fp][:2]
         if status in DECIDED:
             plan.skipped_decided.append(fp)
         elif status in REFRESHABLE:
@@ -64,7 +71,7 @@ def plan_sync(existing: dict[str, tuple[int, str]], proposed: list[dict], allow_
         else:  # applying / failed
             plan.left_alone.append(fp)
     if allow_supersede:
-        plan.supersede = sorted(cid for fp, (cid, status) in existing.items() if status == "pending" and fp not in seen)
+        plan.supersede = sorted(v[0] for fp, v in existing.items() if v[1] == "pending" and fp not in seen)
     return plan
 
 
@@ -97,9 +104,20 @@ class Store:
                  account_count, error, run_id))
 
     # ---------- cases ----------
-    def existing_cases(self) -> dict[str, tuple[int, str]]:
-        rows = self.conn.execute("select id, fingerprint, status from cases").fetchall()
-        return {r["fingerprint"]: (r["id"], r["status"]) for r in rows}
+    def existing_cases(self) -> dict[str, tuple[int, str, str]]:
+        rows = self.conn.execute("select id, fingerprint, status, subject_key from cases").fetchall()
+        return {r["fingerprint"]: (r["id"], r["status"], r["subject_key"]) for r in rows}
+
+    def decided_cases(self) -> list[dict]:
+        """Approved/rejected cases with their ORIGINAL proposed operations (feeds field-level decision memory)."""
+        return self.conn.execute(
+            "select subject_key, operations from cases where status in ('applied', 'rejected')").fetchall()
+
+    def last_good_location_count(self) -> int | None:
+        row = self.conn.execute(
+            """select location_count from runs where status = 'succeeded' and location_count is not null
+               and coalesce((summary -> 'scrape' ->> 'complete')::boolean, false) order by id desc limit 1""").fetchone()
+        return row["location_count"] if row else None
 
     def sync_cases(self, run_id: int, proposed: list[dict], allow_supersede: bool = True) -> dict[str, int]:
         """Apply today's proposals idempotently, in one transaction. Returns counts for the run summary."""
