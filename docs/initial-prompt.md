@@ -1,7 +1,8 @@
 # Initial prompt
 
 The first prompt I gave Claude Code (Opus 5.5) to start this exercise, reproduced word for word.
-The exercise workspace page it refers to was provided alongside it as a local file (with my personal API token already removed).
+The exercise workspace page it refers to was provided alongside it as a local file, now at
+[project-instructions-page.txt](project-instructions-page.txt) (my personal API token already replaced with `MY_TOKEN`).
 Every later prompt is recorded verbatim in [prompts-log.md](prompts-log.md).
 
 ---

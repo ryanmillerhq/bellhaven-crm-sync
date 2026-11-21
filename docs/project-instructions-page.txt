@@ -1,0 +1,115 @@
+<html lang="en" data-scribe-recorder-ready="true"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Your Exercise Workspace</title>
+<style>
+  :root { --ink: #37171a; --muted: #7d6a63; --accent: #ca3051; --accent-dark: #a52441; --dark: #37171a; --yellow: #fafa64; --line: #e4dcc9; --bg: #f8f4ea; --panel-line: #ece3d2; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 16px; line-height: 1.6; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 48px 22px 90px; }
+  h1 { font-size: 27px; letter-spacing: -0.01em; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 34px 0 8px; color: var(--accent); }
+  .sub { color: var(--muted); margin: 0 0 26px; }
+  .panel { background: #fff; border: 1px solid var(--panel-line); border-radius: 8px; padding: 22px 26px; margin: 18px 0; }
+  code, .code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; background: #f0e9d9; padding: 2px 6px; border-radius: 4px; }
+  .tokenbox { font-family: ui-monospace, Menlo, monospace; font-size: 15px; background: var(--dark); color: var(--yellow); padding: 12px 16px; border-radius: 6px; word-break: break-all; margin: 8px 0; }
+  pre { background: var(--dark); color: #f0e9d9; padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  input[type=text], input[type=email], input[type=url], textarea { width: 100%; padding: 10px 12px; border: 1px solid #d9cdb8; border-radius: 6px; font-size: 15px; font-family: inherit; }
+  textarea { min-height: 140px; font-size: 14px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  button { padding: 11px 22px; background: var(--accent); color: #fff; border: 0; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 18px; }
+  button:hover { background: var(--accent-dark); }
+  ol li, ul li { margin-bottom: 9px; }
+  a { color: var(--accent); }
+  .pill { display: inline-block; font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 3px 12px; background: #e7efe9; color: #1e6e46; }
+  .warn { background: #fdf6d8; border-left: 3px solid #e6e650; color: #5c4a10; border-radius: 0 6px 6px 0; padding: 12px 16px; font-size: 14.5px; }
+  .kv { color: var(--muted); font-size: 14px; }
+  .brandbar { background: var(--dark); padding: 14px 22px; display: flex; align-items: baseline; gap: 12px; }
+  .brandbar .brand { font-weight: 800; font-size: 17px; letter-spacing: -0.01em; color: var(--yellow); }
+  .brandbar .divider { color: #6d4a4e; }
+  .brandbar .app { font-size: 14px; color: #f0e9d9; font-weight: 600; }
+</style>
+<script src="chrome-extension://liecbddmkiiihnedobmlmillhodjkdmb/js/recordConsoleEvents.js"></script></head>
+<body>
+<div class="brandbar"><span class="brand">Clipboard Health</span><span class="divider">|</span><span class="app">Analyst Assessment</span></div>
+<div class="wrap">
+<h1>Welcome, Ryan Miller</h1>
+<p class="sub">Bookmark this page. It has everything you need, and it's where you submit.</p>
+<div class="kv">Workspace created <time datetime="2026-11-21T18:39:31Z">Nov 21, 2026, 2:39 PM GMT-4</time> · Submission deadline <b><time datetime="2026-11-23T18:39:31Z">Nov 23, 2026, 2:39 PM GMT-4</time></b></div>
+
+
+<h2>Why this exercise</h2>
+<div class="panel">
+  <p>One of the toughest parts of keeping our CRM clean is that long term care facilities are constantly being bought and sold. Roughly sixty percent of the LTC facilities we work with are owned by a larger parent company, and ownership changes hands all the time. Facilities get acquired, rebranded, split up, and consolidated, and every one of those events can quietly break the link between a facility and its parent company in our CRM.</p>
+  <p>Those links matter a lot. Selling to a corporate owned facility works differently than selling to an independent one. Contracts often need corporate sign off, and outreach frequently has to go through the corporate office rather than the facility itself. So knowing which parent company owns a given facility at any given moment is core to how our sales team operates, and keeping that ownership picture accurate is an ongoing, real problem for our team.</p>
+  <p>This exercise is a scaled down version of a system we actually run in production. We built a fictional operator so you can work with realistic, messy data without touching our real CRM.</p>
+</div>
+
+<h2>The scenario</h2>
+<div class="panel">
+  <p>Bellhaven Senior Living is a senior care operator (fictional, built for this exercise). Their communities are listed on their website. You have API access to our CRM sandbox, which contains around 120 accounts of varying quality. Like any real CRM, some of the data is stale, duplicated, or mislabeled.</p>
+  <ul>
+    <li>Website · <a href="/" target="_blank">https://analyst-assessment-production.up.railway.app</a></li>
+    <li>CRM API base · <span class="code">https://analyst-assessment-production.up.railway.app/api/v1</span></li>
+    <li>Interactive API docs · <a href="/api/docs" target="_blank">https://analyst-assessment-production.up.railway.app/api/docs</a></li>
+    <li>CRM browser (read only) · <a href="/crm/MY_TOKEN/accounts" target="_blank">click around your copy of the CRM</a> the way a sales rep would. All changes still go through the API.</li>
+  </ul>
+  <p><b>Your personal API token</b> (send it on every request)</p>
+  <div class="tokenbox">MY_TOKEN</div>
+  <pre>curl -H "Authorization: Bearer MY_TOKEN" \
+  "https://analyst-assessment-production.up.railway.app/api/v1/accounts?q=bellhaven"</pre>
+  <p>Your token maps to your own isolated copy of the CRM. You can't break anything, so explore freely.</p>
+</div>
+
+<h2>What to build</h2>
+<div class="panel">
+  <ol>
+    <li><b>A scraper</b> that pulls every Bellhaven location from the website (name, address, city, state, zip, care offerings).</li>
+    <li><b>Matching logic</b> that links each location to the right CRM account and classifies it. Some possibilities you should handle include a confident match, a match that needs a fix (for example a wrong parent account or an outdated name), a location that has no CRM account yet, and CRM accounts under the Bellhaven parent that no longer appear on the website.</li>
+    <li><b>A small review app</b> (running locally is fine) where a reviewer sees each proposed change with its supporting evidence and can approve or reject it. Approved changes write back to the CRM through the API. Nothing writes without approval.</li>
+    <li><b>Built to run daily.</b> Include the schedule configuration you would use (a cron entry or a GitHub Actions workflow file is fine, it does not need to be live). Re-runs must be safe. Running the pipeline a second time must not re-propose items that were already decided.</li>
+  </ol>
+  <p>Useful CRM conventions. Accounts have a <span class="code">parent_id</span> linking facilities to their parent company account. Some of your findings won't be simple field updates. For example, you may conclude an account is a duplicate or shouldn't be under Bellhaven anymore. Your tools for expressing those outcomes are the <span class="code">status</span> field (valid values are Active, Inactive, and Needs Review) and the free text <span class="code">note</span> field. There is no merge or delete in this API. If you conclude an account is a duplicate of another, set <span class="code">duplicate_of_account</span> on the losing copy to the surviving account's id and mark it Inactive. Explain your choices in the writeup.</p>
+  <p><b>Important. Your finished submission is a corrected CRM, not just a tool.</b> Before the deadline, actually run your pipeline, review the proposals in your app, and approve the ones you believe are right so the changes land in your CRM copy. We evaluate the end state of your data alongside the system that produced it. A review queue full of unapproved proposals scores the same as doing nothing.</p>
+  <p><b>Record a short demo while you review.</b> When you work through your review queue, screen record about 2 minutes of it and talk us through what you're doing. Show a few proposals with their evidence, approve one, reject one, and then show the approved change landing in the CRM browser. Polish doesn't matter. Any free screen recorder works (Loom, an unlisted YouTube video, or a Google Drive file). Please set sharing to anyone with the link can view, and paste the link in the form below.</p>
+  <div class="warn" style="margin-top:16px">
+    <b>One SOP you must follow.</b> Some facilities have billing history with us, and every account carries <span class="code">lifetime_revenue</span> and <span class="code">outstanding_ar</span> fields. When an account needs to move to a different parent, check them first. If the account has revenue history AND outstanding AR greater than zero, our billing team needs the old account preserved, so you must NOT change its parent. Instead, leave the existing account exactly as it is, create a new account for the facility under the correct parent, and set <span class="code">chow_current_account</span> on the OLD account to the new account's id (CHOW stands for change of ownership). If the account has no revenue history, or no outstanding AR, re-parent the existing account directly. Handling this correctly matters as much as the matching itself.
+  </div>
+</div>
+
+<h2>Ground rules</h2>
+<div class="panel">
+  <ul>
+    <li><b>Use any AI tools you like.</b> That is the point. We work this way daily and we want to see how well you direct these tools and check their work. Free chat tiers of Claude, ChatGPT, or Gemini are fully sufficient. You do not need any paid API keys. Your CRM token above is the only key this exercise requires, and nothing in it requires LLM calls inside your pipeline itself. If you do want your pipeline to call an LLM, Gemini's API currently offers a free tier.</li>
+    <li>Expect this to take <b>roughly 2 focused hours</b>. Note your actual time honestly below. A longer but perfect submission does not outscore a fast, sound one.</li>
+    <li>Nothing needs to be hosted or deployed. You'll demo your app from your own machine in a live 45 minute walkthrough, which includes making a small live change to your system.</li>
+  </ul>
+</div>
+
+<h2>Submit your work</h2>
+<div class="panel">
+  <form method="post" action="/welcome/MY_TOKEN/submit">
+    <label>Repo link (public GitHub repo, or a shared zip/Drive link)</label>
+    <input type="url" name="repo_url" required="" value="" placeholder="https://github.com/you/bellhaven-sync">
+    <label>Demo video link (about 2 minutes, Loom, unlisted YouTube, or Google Drive)</label>
+    <input type="url" name="video_url" required="" value="" placeholder="https://www.loom.com/share/...">
+    <label>Actual time spent (honest estimate)</label>
+    <input type="text" name="hours" value="" placeholder="e.g. 2.5 hours" maxlength="60">
+    <label>Writeup · your matching approach, how you used AI tools, what you'd build next</label>
+    <textarea name="writeup" required="" placeholder="Half a page is plenty."></textarea>
+    <button type="submit">Submit</button>
+  </form>
+</div>
+</div>
+<script>
+  // Render UTC timestamps in the viewer's local timezone.
+  document.querySelectorAll("time[datetime]").forEach(function (el) {
+    var d = new Date(el.getAttribute("datetime"));
+    if (!isNaN(d)) {
+      el.textContent = d.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+    }
+  });
+</script>
+
+<scribe-shadow id="crxjs-ext" data-crx="okfkdaglfjjjfefdcppliegebpoegaii" style="position: fixed; width: 0px; height: 0px; top: 0px; left: 0px; z-index: 2147483647; overflow: visible; visibility: visible; pointer-events: none;"></scribe-shadow></body></html>

@@ -63,7 +63,7 @@ When an account needs to move to a **different parent**:
 - No human-like / evasion scraping (site has no bot detection). Mention in the writeup that this capability exists
   (Ryan's `human_simulator.py`) for future sources that resist scraping.
 - **Secrets:** repo is PUBLIC. The CRM token lives only in `.env` (gitignored). Never commit, print, or log it.
-  `project-instructions-page.txt` (personal workspace page) is gitignored too.
+  The original exercise page is at `docs/project-instructions-page.txt` (token already replaced with `MY_TOKEN`).
 - Host the review app on Vercel after it works locally — protect write actions (token is server-side only).
 - **Commits:** small, segmented, well-described commits (one concern each, conventional prefixes like `feat(scraper):`,
   `docs:`, `chore:`), pushed regularly, so the repo history documents progress. Never batch unrelated work.
