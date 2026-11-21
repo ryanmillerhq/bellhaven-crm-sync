@@ -75,3 +75,29 @@ https://bellhaven-crm-sync.vercel.app/
 
 It's connected to the git repo
 ````
+
+## Prompt 9 (2026-11-21 15:27 UTC-0400)
+
+````text
+any migrations you want me to run in supabase, put them in a _run-me folder in the project root
+````
+
+## Prompt 10 (2026-11-21 15:30 UTC-0400)
+
+````text
+other stuff I would build next is an enrichment pathway, scraping linkedin and something like rocketreach to get contact info, separate table for contacts to be associated with these accounts, some sort of pipeline tracking system with a simple visuals page, as well as some prominent dashboard visualization pages that show these accounts as dots on a map of the US, color coded, with the ability to zoom and pull up info, even filter to just the ones that need attention and resolve their case via the map visual in a hover card.
+
+We could even gamify the review process
+````
+
+## Prompt 11 (2026-11-21 15:32 UTC-0400)
+
+````text
+ran that migration.
+````
+
+## Prompt 12 (2026-11-21 15:33 UTC-0400)
+
+````text
+you can move the project instructions page to docs
+````
