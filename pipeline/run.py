@@ -34,24 +34,27 @@ def run_pipeline(*, trigger: str = "manual", dry_run: bool = False, scrape_file:
         store = Store(settings.database_url)
         run_id = store.start_run(trigger)
     try:
-        if scrape_file:
-            locations, report = load_scrape(scrape_file)
-        else:
-            from .scraper import scrape
-            locations, report = scrape(settings.site_base_url, headless=headless)
-        crm = ReadOnlyCRM(settings.crm_base_url, settings.crm_api_token)
-        accounts, contacts = crm.accounts(), crm.contacts()
-
-        # Past decisions + last good scrape size come from the store (read-only here; dry runs use them too).
-        decided_cases, last_good = [], None
+        # Memory from the store (read-only here; dry runs use it too): past decisions, last good scrape size, and
+        # the communities it found (probed directly if they're no longer linked).
+        decided_cases, last_good, known_slugs = [], None, []
         reader = store
         if reader is None and settings.database_url:
             from .store import Store
             reader = Store(settings.database_url)
         if reader is not None:
             decided_cases, last_good = reader.decided_cases(), reader.last_good_location_count()
+            known_slugs = reader.last_good_slugs()
             if reader is not store:
                 reader.close()
+
+        if scrape_file:
+            locations, report = load_scrape(scrape_file)
+        else:
+            from .scraper import scrape
+            locations, report = scrape(settings.site_base_url, headless=headless, known_slugs=known_slugs)
+        crm = ReadOnlyCRM(settings.crm_base_url, settings.crm_api_token)
+        accounts, contacts = crm.accounts(), crm.contacts()
+
         complete = report.complete and (last_good is None
                                         or len(locations) >= rules.MIN_SCRAPE_RATIO_VS_LAST_RUN * last_good)
         if report.complete and not complete:

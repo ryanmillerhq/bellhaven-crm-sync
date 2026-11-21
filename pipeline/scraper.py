@@ -137,7 +137,14 @@ class BellhavenScraper:
                 log.warning("retrying %s", url)
         raise RuntimeError("unreachable")
 
-    def run(self) -> tuple[list[Location], ScrapeReport]:
+    def probe(self, slug: str) -> Location | None:
+        """Directly open a previously known community page that is no longer linked. None = page is gone."""
+        try:
+            return self.detail(slug, f"{self.base}/communities/{slug}")
+        except Exception:
+            return None
+
+    def run(self, known_slugs: list[str] | tuple = ()) -> tuple[list[Location], ScrapeReport]:
         home_links, claimed = self.homepage()
         dir_links, pages, listed = self.directory()
 
@@ -151,6 +158,18 @@ class BellhavenScraper:
         locations: list[Location] = []
         warnings: list[str] = []
         failed: list[str] = []
+        # Communities seen in the last good run but no longer linked anywhere (e.g. a homepage "new" notice rotated
+        # off): probe their pages directly so a live community doesn't look "no longer listed".
+        for slug in known_slugs:
+            if slug in urls:
+                continue
+            loc = self.probe(slug)
+            if loc is not None:
+                loc.found_on = ["direct URL (no longer linked)"]
+                locations.append(loc)
+                warnings.append(f"{slug}: no longer linked from the homepage or directory, but its page is still live")
+            else:
+                log.info("previously known community %s is gone from the site", slug)
         for slug, url in urls.items():
             try:
                 loc = self.detail(slug, url)
@@ -176,9 +195,9 @@ class BellhavenScraper:
         return locations, report
 
 
-def scrape(base_url: str, headless: bool = True) -> tuple[list[Location], ScrapeReport]:
+def scrape(base_url: str, headless: bool = True, known_slugs: list[str] | tuple = ()) -> tuple[list[Location], ScrapeReport]:
     driver = make_driver(headless=headless)
     try:
-        return BellhavenScraper(base_url, driver).run()
+        return BellhavenScraper(base_url, driver).run(known_slugs=known_slugs)
     finally:
         driver.quit()
