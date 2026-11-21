@@ -29,3 +29,6 @@ Thumbs.db
 
 # scratch scrape output (dated snapshots are committed)
 data/scrapes/latest.json
+
+# agent worktrees (parallel builds on their own branches)
+.claude/worktrees/
