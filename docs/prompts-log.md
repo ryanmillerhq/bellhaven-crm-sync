@@ -284,3 +284,33 @@ all 8 re-approved, history shows applied
 
 You don't need to cite lordicon.com at the bottom cause I pay the license, right?
 ````
+
+## Prompt 33 (2026-11-21 17:24 UTC-0400)
+
+````text
+Let's not do an extra writeup, just the half page that they ask for, they said it's plenty.
+````
+
+## Prompt 34 (2026-11-21 17:27 UTC-0400)
+
+````text
+should I make that github action run live? Or is having it enough? Review the initial instructions.
+
+What's the github repo link?
+
+What's the absolute path to my writeup?
+````
+
+## Prompt 35 (2026-11-21 17:31 UTC-0400)
+
+````text
+that has been updated and redeployed (the port)
+
+Can you please have an agent do one final pass to check the CRM/website data and make sure the data looks clean and ready to submit?
+````
+
+## Prompt 36 (2026-11-21 17:34 UTC-0400)
+
+````text
+after this final-audit (if it comes back clean), good to submit? I already pasted the half page writeup.
+````
