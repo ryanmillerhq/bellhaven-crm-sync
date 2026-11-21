@@ -6,8 +6,14 @@ sequencing, and an audit trail stamped with REVIEWER and "via mcp".
 """
 from __future__ import annotations
 
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
+import anyio
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -17,6 +23,8 @@ from .client import ReviewApp, ReviewAppError, Settings
 from .formatting import (format_account, format_accounts, format_case, format_case_list, format_progress,
                          format_results, format_runs)
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PIPELINE_TIMEOUT_S = 15 * 60
 CASE_STATUSES = ("pending", "applying", "applied", "rejected", "failed", "stale", "superseded")
 CASE_KINDS = ("chow", "reparent", "duplicate", "rename", "field_fix", "create", "sold", "unlisted", "reactivate")
 
@@ -245,6 +253,66 @@ async def reopen_case(case_id: int) -> str:
     except ReviewAppError as e:
         raise _write_error(e, case_id, "reopened") from e
     return f"REOPENED case #{case_id} “{c.get('title')}”: status is now {c.get('status')}."
+
+
+# ---------------------------------------------------------------------------------------------- pipeline
+
+def _pipeline_python() -> str:
+    for rel in (".venv/Scripts/python.exe", ".venv/bin/python"):
+        if (REPO_ROOT / rel).exists():
+            return str(REPO_ROOT / rel)
+    return sys.executable
+
+
+_SECRET_PATTERNS = [
+    (re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+"), r"\1[redacted]"),
+    (re.compile(r"/crm/[^/\s]+/"), "/crm/[redacted]/"),
+    (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://[redacted]@"),
+]
+
+
+def _redact(text: str) -> str:
+    for pattern, repl in _SECRET_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
+    structured_output=False,
+)
+async def run_pipeline(dry_run: bool = True) -> str:
+    """Run the sync pipeline (scrape the website, read the CRM read-only, match, build cases) and return its summary.
+
+    dry_run=True (default): prints the cases it would queue and saves nothing.
+    dry_run=False: saves the run and its cases to the REAL review queue (new cases appear, changed ones refresh).
+    It never writes to the CRM, but only use dry_run=False after the human explicitly confirms it.
+    Takes a minute or two (it drives a headless browser).
+    """
+    cmd = [_pipeline_python(), "-m", "pipeline", "run"] + (["--dry-run"] if dry_run else [])
+    shown = "python -m pipeline run" + (" --dry-run" if dry_run else "")
+
+    def run() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            cmd, cwd=REPO_ROOT, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=PIPELINE_TIMEOUT_S, env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
+    try:
+        proc = await anyio.to_thread.run_sync(run)
+    except subprocess.TimeoutExpired as e:
+        raise ToolError(f"`{shown}` did not finish within {PIPELINE_TIMEOUT_S // 60} minutes and was stopped.") from e
+    except OSError as e:
+        raise ToolError(f"Could not start `{shown}` with {cmd[0]}: {e}") from e
+
+    out = [line.rstrip() for line in _redact(proc.stdout or "").splitlines()]
+    while out and not out[0]:
+        out.pop(0)
+    if proc.returncode != 0:
+        err = _redact(proc.stderr or "").strip().splitlines()[-25:]
+        raise ToolError("\n".join([f"`{shown}` failed (exit {proc.returncode}).", *out[-40:], "stderr (last lines):", *err]))
+    return "\n".join([f"`{shown}` finished (exit 0) in {REPO_ROOT.name}:", "", *out[-150:]])
 
 
 def main() -> None:
