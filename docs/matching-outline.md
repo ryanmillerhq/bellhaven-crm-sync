@@ -1,6 +1,6 @@
 # Matching logic outline (for Ryan's review)
 
-> Status: **DRAFT, awaiting Ryan's corrections.** No matching code has been written yet.
+> Status: **APPROVED by Ryan (2026-11-21): all eight recommendations in section 9 accepted as written.**
 > Grounded in a read-only pull of the real CRM (121 accounts, 67 contacts) and a full scrape of the website
 > (35 communities). Section 9 lists the judgment calls I need you to confirm or overrule.
 
