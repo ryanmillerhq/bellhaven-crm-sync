@@ -3,26 +3,36 @@
 The exercise asks for: a few proposals with their evidence, approve one, reject one, then the approved change
 landing in the CRM browser. Polish doesn't matter; talking through the reasoning does.
 
-## Before recording
-- `python -m pipeline run`: the queue should show **26 pending** (if it was already run today, expect 0 new / 26 refreshed).
-- Start the review app: `cd web && npx next dev -p 3210` (port 3000 is used by another local app), then open
-  http://localhost:3210 and enter your name at "Who's reviewing?".
-- **Warm-up, off camera:** approve **Bellhaven of Batavia** (a create) and **Bellhaven Rehabilitation & Nursing of
-  Grove City** (a rename) first. The CRM's POST/PATCH shapes can't be tested without a real write, so this confirms
-  both before recording. If either fails, the case shows the CRM's error and can be retried after a fix.
-- Open a second tab on the CRM browser (the app's "Open in CRM" links go there).
-- Recorder (Loom / OBS / Xbox Game Bar `Win+Alt+R`) set to capture the browser window plus the microphone.
+## Before recording (off camera)
+1. Open http://localhost:3210 and enter your name at **"Who's reviewing?"**.
+2. **Warm-up approvals** (confirm the CRM accepts our create + update before recording):
+   - http://localhost:3210/?case=81: **Bellhaven of Batavia** (create) → Approve, let the 5s Undo run out
+   - http://localhost:3210/?case=53: **Grove City** rename → Approve
+   - Both should show as applied in the **History** tab. If either shows an error, paste it to Claude.
+3. **Pre-open one browser tab per shot**, in this order (each link jumps straight to that case):
 
-## Script
-| Time | Show | Say (roughly) |
+| Tab | Link | Case |
 |---|---|---|
-| 0:00 | Progress header (ring + segments, 26 cases) | "Every day this scrapes Bellhaven's site, matches the 35 communities to the CRM, and queues one case per facility. Nothing writes until I approve." |
-| 0:15 | **Bellhaven of Tiffin** (CHOW) | "The site lists Tiffin as Bellhaven, but the CRM still has it under Cedar Trail. The SOP check shows $84k of revenue and $12.4k open AR, so we can't move it: approving creates a new Bellhaven account and points the old one at it. The old account stays exactly as is." → **Approve** (let the Undo toast run out) |
-| 0:45 | **Bellhaven of Kettering** (3 duplicates) | "Three CRM records at one address, under three different parents. It keeps one, re-parents and renames it, and marks the other two as Inactive duplicates. The survivor tie-break is stated honestly: lowest account id." (Approve or just show.) |
-| 1:05 | **Amberly Manor** (create, lookalike) | "There's an 'Amberly Manor' in the CRM, but it's in Colorado Springs. Address is identity, names are labels, so this is a new account, not a match." |
-| 1:20 | **Bellhaven of Ashtabula** (optional PO Box) | "The CRM's billing street is a PO Box. Our policy is that a PO Box is a valid billing address, so I'm rejecting this one." → **Reject**, reason "PO Box is a valid billing address" |
-| 1:35 | CRM browser: the new **Bellhaven of Tiffin** account, then the old Cedar Trail account | "Here's the new account under Bellhaven, and the old one is unchanged except chow_current_account, which points to it. The note records who approved it." |
-| 1:50 | History tab (audit trail) | "Every decision is logged with who made it and how. If the pipeline runs again tomorrow, decided items never come back." |
+| 1 | http://localhost:3210/?case=79 | Bellhaven of Tiffin (CHOW) |
+| 2 | http://localhost:3210/?case=59 | Bellhaven of Kettering (3 duplicates) |
+| 3 | http://localhost:3210/?case=84 | Amberly Manor (create; Colorado Springs lookalike) |
+| 4 | http://localhost:3210/?case=67 | Bellhaven of Ashtabula (optional PO Box → Reject) |
+| 5 | http://localhost:3210/crm/001U6RW32TY0WSXZZB | Old Cedar Trail "Bellhaven of Tiffin" in the CRM browser |
+
+   Press **F5** when you switch tabs so the progress counts are current (optional; decisions are always re-checked
+   on the server).
+4. Recorder (Loom / OBS / Xbox Game Bar `Win+Alt+R`) set to capture the browser window plus the microphone.
+
+## Script (≈2 min)
+| Time | Tab | Do | Say (roughly) |
+|---|---|---|---|
+| 0:00 | 1 | Point at the progress ring and segments | "Every day this scrapes Bellhaven's site, matches the 35 communities to the CRM, and queues one case per facility. Nothing writes until I approve." |
+| 0:15 | 1 | Walk Tiffin's evidence → SOP check → the 2 steps; **Approve** (let Undo run out) | "The site lists Tiffin as Bellhaven, but the CRM has it under Cedar Trail with $84k revenue and $12.4k open AR. Per the SOP we don't move it: approving creates a new Bellhaven account and points the old one at it." |
+| 0:45 | 2 | Show the 3 records + survivor reason; **Approve** | "Three records at one address under three parents. It keeps one, re-parents and renames it, and marks the other two as Inactive duplicates. The tie-break is stated honestly." |
+| 1:05 | 3 | Point at the lookalike line; **Approve** | "There's an 'Amberly Manor' in the CRM, but it's in Colorado Springs. Address is identity, so this is a new account." |
+| 1:20 | 4 | **Reject** with reason "PO Box is a valid billing address" | "Optional case: the billing street is a PO Box, and our policy keeps it, so I'm rejecting." |
+| 1:35 | 5 | F5: the old account now shows CHOW → the new account; click through to the new Bellhaven of Tiffin | "The old account is untouched except the CHOW pointer, and the new one sits under Bellhaven, with a note saying who approved it." |
+| 1:50 | 1 | **History** tab | "Every decision is logged with who made it and how, and a re-run tomorrow won't re-propose anything decided." |
 
 ## Review run-through (off camera, before the deadline)
 Recommended decisions (I pre-checked every case against the data; the adversarial review agreed):

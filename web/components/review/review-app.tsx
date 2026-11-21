@@ -71,6 +71,12 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
     [cases, kindFilter],
   );
 
+  // Deep link: /?case=<id> opens that case directly (e.g. a demo shot list, or a link from Slack/MCP).
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get("case"));
+    if (Number.isInteger(id) && id > 0) { setTab("review"); setKindFilter(null); setFocusId(id); }
+  }, []);
+
   useEffect(() => {
     if (focusId == null) return;
     const i = queue.findIndex((c) => c.id === focusId);
