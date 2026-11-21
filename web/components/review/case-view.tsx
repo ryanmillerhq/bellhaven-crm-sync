@@ -92,7 +92,7 @@ export function CaseView(p: CaseViewProps) {
             </ul>
           </Section>
           <Section title="Evidence: website vs CRM" icon="analytics">
-            <EvidenceTable rows={c.evidence} caseKey={c.id} />
+            <EvidenceTable rows={c.evidence} caseKey={c.id} accounts={c.accounts} />
           </Section>
           {c.accounts.length > 0 && (
             <Section title={c.accounts.length > 1 ? `CRM records involved (${c.accounts.length})` : "CRM record"} icon="copy">

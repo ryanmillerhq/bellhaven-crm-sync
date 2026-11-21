@@ -54,9 +54,13 @@ export function AuditTimeline({ c, events, className }: { c: Case; events: CaseE
       items.push({ key: `ops${e.id}`, dot: "bg-emerald-400", text: <>{opsRun} step{opsRun === 1 ? "" : "s"} written to the CRM</>, at: e.at });
       opsRun = 0;
     }
+    const runId = (e.detail as { run_id?: number } | null)?.run_id;
+    const byPipeline = e.via === "pipeline";
+    // pipeline events: "Proposed by pipeline run #3"; human events: "Approved by Ryan Miller · via UI"
+    const actor = byPipeline && runId && !/run #/.test(e.actor ?? "") ? `pipeline run #${runId}` : shortName(e.actor);
     items.push({
       key: `e${e.id}`, dot: meta.dot, at: e.at, title: e.actor ?? undefined,
-      text: <>{meta.verb} <b>{shortName(e.actor)}</b>{e.via ? <span className="text-muted-foreground"> · {viaLabel(e.via)}</span> : null}</>,
+      text: <>{meta.verb} <b>{actor}</b>{e.via && !byPipeline ? <span className="text-muted-foreground"> · {viaLabel(e.via)}</span> : null}</>,
     });
   }
   if (!items.length) return null;

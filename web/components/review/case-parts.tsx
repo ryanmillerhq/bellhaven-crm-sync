@@ -59,8 +59,14 @@ const MATCH = {
   missing: { icon: Minus, cls: "text-muted-foreground", label: "Missing on one side" },
 } as const;
 
-export function EvidenceTable({ rows, caseKey }: { rows: EvidenceRow[]; caseKey: number }) {
+/** Rows that are evidence only (never synced, left as is by policy) shouldn't look like problems to fix. */
+const informational = (r: EvidenceRow) => /evidence only|not synced|aren't synced|left as is/i.test(r.note ?? "");
+
+export function EvidenceTable({ rows, caseKey, accounts = [] }: { rows: EvidenceRow[]; caseKey: number; accounts?: CaseAccount[] }) {
   if (!rows.length) return null;
+  // Duplicate/sold cases carry evidence for several CRM records: label each block with the record it compares.
+  const grouped = new Set(rows.map((r) => r.account_id ?? "")).size > 1;
+  const who = Object.fromEntries(accounts.map((a) => [a.account.account_id, a]));
   return (
     <div className="overflow-hidden rounded-xl border">
       <div className="grid grid-cols-[7.5rem_1fr_1fr_1.75rem] gap-x-3 border-b bg-muted/40 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -68,21 +74,34 @@ export function EvidenceTable({ rows, caseKey }: { rows: EvidenceRow[]; caseKey:
       </div>
       <ul>
         {rows.map((r, i) => {
-          const m = MATCH[r.match];
+          const info = r.match === "different" && informational(r);
+          const m = info ? { ...MATCH.different, cls: "text-muted-foreground" } : MATCH[r.match];
+          const header = grouped && (i === 0 || rows[i - 1].account_id !== r.account_id) && r.account_id ? who[r.account_id] : null;
           return (
-            <li key={`${caseKey}-${r.field}-${r.account_id ?? ""}-${i}`}
-              className={cn("animate-fade-in-up grid grid-cols-[7.5rem_1fr_1fr_1.75rem] items-start gap-x-3 border-b px-3 py-2 text-sm last:border-b-0",
-                r.match === "different" && "animate-flash-highlight")}
-              style={{ animationDelay: `${Math.min(i * 45, 450)}ms` }}>
-              <span className="pt-px text-xs font-medium text-muted-foreground">{r.label}</span>
-              <span className={cn("min-w-0 break-words", !r.website && "text-muted-foreground")}>{r.website ?? "—"}</span>
-              <span className={cn("min-w-0 break-words", !r.crm && "text-muted-foreground", r.match === "different" && "font-medium")}>{r.crm ?? "—"}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={cn("flex justify-center pt-0.5", m.cls)}><m.icon className="size-4" aria-label={m.label} /></span>
-                </TooltipTrigger>
-                <TooltipContent>{r.note ? `${m.label}: ${r.note}` : m.label}</TooltipContent>
-              </Tooltip>
+            <li key={`${caseKey}-${r.field}-${r.account_id ?? ""}-${i}`} className="border-b last:border-b-0">
+              {header && (
+                <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
+                  <span className={cn("rounded-full px-1.5 py-px font-medium", ROLE[header.role].tone)}>{ROLE[header.role].label}</span>
+                  <span className="truncate font-medium text-foreground">{header.account.name}</span>
+                  <span className="font-mono">{header.account.account_id}</span>
+                </div>
+              )}
+              <div
+                className={cn("animate-fade-in-up grid grid-cols-[7.5rem_1fr_1fr_1.75rem] items-start gap-x-3 px-3 py-2 text-sm",
+                  r.match === "different" && !info && "animate-flash-highlight")}
+                style={{ animationDelay: `${Math.min(i * 45, 450)}ms` }}>
+                <span className="pt-px text-xs font-medium text-muted-foreground">{r.label}</span>
+                <span className={cn("min-w-0 break-words", !r.website && "text-muted-foreground")}>{r.website ?? "—"}</span>
+                <span className={cn("min-w-0 break-words", !r.crm && "text-muted-foreground", r.match === "different" && !info && "font-medium", info && "text-muted-foreground")}>
+                  {r.crm ?? "—"}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={cn("flex justify-center pt-0.5", m.cls)}><m.icon className="size-4" aria-label={m.label} /></span>
+                  </TooltipTrigger>
+                  <TooltipContent>{r.note ? `${m.label}: ${r.note}` : m.label}</TooltipContent>
+                </Tooltip>
+              </div>
             </li>
           );
         })}
