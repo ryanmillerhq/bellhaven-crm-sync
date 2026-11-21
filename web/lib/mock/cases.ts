@@ -6,7 +6,7 @@
  */
 import snapshot from "./snapshot.json";
 import type {
-  AccountRole, Case, CaseAccount, CaseKind, CrmAccount, CrmContact, EvidenceRow, Location, MatchResult, Operation,
+  AccountRole, Case, CaseAccount, CaseEvent, CaseKind, CrmAccount, CrmContact, EvidenceRow, Location, MatchResult, Operation,
   Precondition, Run, SopCheck,
 } from "../types";
 
@@ -395,6 +395,14 @@ const IN_SYNC: [string, string][] = [
   ["bellhaven-of-kalamazoo", "001NSHWKQD0YJLPQ20"], ["bellhaven-court-of-altoona", "0011D2P3CWSHMF81C8"],
   ["bellhaven-of-ashtabula", "001NXP9X46CWEPSLSV"],
 ];
+
+/** The pipeline's own audit entry for each case ("proposed by run #1"), as the real pipeline writes it. */
+export function buildMockEvents(cases: Case[]): Omit<CaseEvent, "id">[] {
+  return cases.map((c) => ({
+    case_id: c.id, at: c.created_at ?? `${TODAY}T19:40:00.000Z`, event: "proposed", actor: "pipeline run #1", via: "pipeline",
+    detail: { run_id: 1, fingerprint: c.fingerprint },
+  }));
+}
 
 export function buildMockRuns(cases: Case[]): Run[] {
   const match_results: MatchResult[] = IN_SYNC.map(([slug, id]) => {

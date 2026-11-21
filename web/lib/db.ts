@@ -77,6 +77,13 @@ export class PgCaseStore implements CaseStore {
     return rows.map((r) => ({ ...r, id: Number(r.id), case_id: Number(r.case_id), at: iso(r.at) }));
   }
 
+  async eventsFor(caseIds: number[]): Promise<CaseEvent[]> {
+    if (!caseIds.length) return [];
+    const { rows } = await pool().query(
+      `select * from public.case_events where case_id = any($1) order by at, id`, [caseIds]);
+    return rows.map((r) => ({ ...r, id: Number(r.id), case_id: Number(r.case_id), at: iso(r.at) }));
+  }
+
   async runs(limit = 20): Promise<Run[]> {
     const { rows } = await pool().query(
       `select id, started_at, finished_at, trigger, status, location_count, account_count, summary, match_results, error

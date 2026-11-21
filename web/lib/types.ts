@@ -83,7 +83,10 @@ export type Operation =
 export interface Precondition { account_id: string; field: string; equals: Value }
 
 export interface OperationResult {
-  op_id: string; ok: boolean; at: string; response?: unknown; created_id?: string; error?: string;
+  op_id: string; ok: boolean; at: string;
+  /** Who ran this step and through which surface. The CRM only sees one shared token, so this is the record. */
+  actor: string; via: "ui" | "mcp";
+  response?: unknown; created_id?: string; error?: string;
 }
 
 export interface Case {

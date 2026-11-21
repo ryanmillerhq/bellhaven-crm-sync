@@ -11,6 +11,8 @@ export interface CaseStore {
   update(id: number, patch: Partial<Case>): Promise<Case>;
   addEvent(caseId: number, event: string, actor: string | null, via: string | null, detail?: unknown): Promise<void>;
   events(caseId: number): Promise<CaseEvent[]>;
+  /** Audit events for many cases at once (dashboard timelines), oldest first. */
+  eventsFor(caseIds: number[]): Promise<CaseEvent[]>;
   runs(limit?: number): Promise<Run[]>;
 }
 
@@ -23,9 +25,10 @@ export class MemoryCaseStore implements CaseStore {
   private runList: Run[];
   private nextEventId = 1;
 
-  constructor(cases: Case[], runs: Run[] = []) {
+  constructor(cases: Case[], runs: Run[] = [], seedEvents: Omit<CaseEvent, "id">[] = []) {
     for (const c of cases) this.cases.set(c.id, clone(c));
     this.runList = clone(runs);
+    for (const e of seedEvents) this.evts.push({ ...clone(e), id: this.nextEventId++ });
   }
 
   async list(filter: CaseFilter = {}) {
@@ -64,6 +67,11 @@ export class MemoryCaseStore implements CaseStore {
 
   async events(caseId: number) {
     return this.evts.filter((e) => e.case_id === caseId).map(clone);
+  }
+
+  async eventsFor(caseIds: number[]) {
+    const ids = new Set(caseIds);
+    return this.evts.filter((e) => ids.has(e.case_id)).map(clone);
   }
 
   async runs(limit = 20) {

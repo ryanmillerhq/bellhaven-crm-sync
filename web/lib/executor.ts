@@ -71,13 +71,18 @@ export async function approveCase(
     throw new CaseConflict(`Case ${id} is ${existing.status}; only pending or failed cases can be approved`);
   }
 
+  const { name: who, via } = opts.actor;
+  await store.addEvent(id, "claimed", who, via, { prior_results: (claimed.result ?? []).length });
+
   const prior = (claimed.result ?? []).filter((r) => r.ok);
   const isRetry = prior.length > 0;
   // A retry replays the operations exactly as first approved (edits included) so finished steps line up.
   const ops = isRetry && claimed.final_operations ? claimed.final_operations : applyEdits(claimed.operations, opts.edits);
-  const decided = { decided_by: opts.actor.name, decided_via: opts.actor.via, decision_note: opts.note ?? claimed.decision_note ?? null };
-  await store.addEvent(id, isRetry ? "retry" : "approved", opts.actor.name, opts.actor.via,
-    { edits: opts.edits ?? {}, note: opts.note ?? null });
+  const decided = { decided_by: who, decided_via: via, decision_note: opts.note ?? claimed.decision_note ?? null };
+  await store.addEvent(id, isRetry ? "retry" : "approved", who, via, { edits: opts.edits ?? {}, note: opts.note ?? null });
+  // Identity, not business logic: every note the executor writes into the CRM says who approved it and how,
+  // because the CRM itself only ever sees the one shared API token.
+  const stamp = (text: string) => `${text.trimEnd()} Approved by ${who} via ${via}.`;
 
   // ids created by earlier successful steps (retries)
   const refs: Record<string, string> = {};
@@ -106,7 +111,7 @@ export async function approveCase(
         acct = (await crm.getAccount(p.account_id)) as Record<string, unknown>;
       } catch (e) {
         const failed = await store.update(id, { status: "failed", error: `Could not read account ${p.account_id} to re-check it: ${message(e)}`, final_operations: ops, ...decided });
-        await store.addEvent(id, "failed", opts.actor.name, opts.actor.via, { stage: "preconditions", error: message(e) });
+        await store.addEvent(id, "failed", who, via, { stage: "preconditions", error: message(e) });
         return { case: failed, outcome: "failed" };
       }
       seen.set(p.account_id, acct);
@@ -118,7 +123,7 @@ export async function approveCase(
     const stale = await store.update(id, {
       status: "stale", final_operations: ops, error: `The CRM changed since this case was proposed: ${what}. Nothing was written; the next pipeline run will re-evaluate it.`, ...decided,
     });
-    await store.addEvent(id, "stale", opts.actor.name, opts.actor.via, { drift });
+    await store.addEvent(id, "stale", who, via, { drift });
     return { case: stale, outcome: "stale" };
   }
 
@@ -127,23 +132,32 @@ export async function approveCase(
   for (const op of ops) {
     if (results.some((r) => r.op_id === op.id && r.ok)) continue;
     try {
-      const res: OperationResult = { op_id: op.id, ok: true, at: now() };
+      const res: OperationResult = { op_id: op.id, ok: true, at: now(), actor: who, via };
       switch (op.op) {
         case "create_account": {
-          const { id: created, response } = await crm.createAccount(resolveFields(op.fields, refs));
+          const fields = resolveFields(op.fields, refs);
+          if (typeof fields.note === "string" && fields.note) fields.note = stamp(fields.note);
+          const { id: created, response } = await crm.createAccount(fields);
           refs[op.ref] = created;
           Object.assign(res, { created_id: created, response });
           break;
         }
         case "update_account": {
           const target = String(resolve(op.account_id, refs));
-          res.response = await crm.updateAccount(target, resolveFields(op.fields, refs));
+          const fields = resolveFields(op.fields, refs);
+          if (typeof fields.note === "string" && fields.note) {
+            // a note set through update_account is still appended, never a blind overwrite
+            const current = String((await crm.getAccount(target)).note ?? "").trim();
+            fields.note = current ? `${current}\n${stamp(fields.note)}` : stamp(fields.note);
+          }
+          res.response = await crm.updateAccount(target, fields);
           break;
         }
         case "append_note": {
           const target = String(resolve(op.account_id, refs));
           const current = String((await crm.getAccount(target)).note ?? "").trim();
-          const note = current ? `${current}\n${op.text}` : op.text; // append, never overwrite
+          const line = stamp(op.text);
+          const note = current ? `${current}\n${line}` : line; // append, never overwrite
           res.response = await crm.updateAccount(target, { note });
           break;
         }
@@ -154,13 +168,15 @@ export async function approveCase(
       }
       results.push(res);
       await store.update(id, { result: results, final_operations: ops });
+      await store.addEvent(id, "op_applied", who, via, { op_id: op.id, describe: op.describe, created_id: res.created_id ?? null });
     } catch (e) {
-      results.push({ op_id: op.id, ok: false, at: now(), error: message(e) });
+      results.push({ op_id: op.id, ok: false, at: now(), actor: who, via, error: message(e) });
       const failed = await store.update(id, {
         status: "failed", result: results, final_operations: ops, ...decided,
         error: `Step "${op.describe}" failed: ${message(e)}. Finished steps are recorded; retrying resumes from this step.`,
       });
-      await store.addEvent(id, "failed", opts.actor.name, opts.actor.via, { op_id: op.id, error: message(e) });
+      await store.addEvent(id, "op_failed", who, via, { op_id: op.id, describe: op.describe, error: message(e) });
+      await store.addEvent(id, "failed", who, via, { op_id: op.id, error: message(e) });
       return { case: failed, outcome: "failed" };
     }
   }
@@ -168,8 +184,7 @@ export async function approveCase(
   const applied = await store.update(id, {
     status: "applied", result: results, final_operations: ops, error: null, decided_at: now(), ...decided,
   });
-  await store.addEvent(id, "applied", opts.actor.name, opts.actor.via,
-    { created: Object.fromEntries(Object.entries(refs)) });
+  await store.addEvent(id, "applied", who, via, { created: Object.fromEntries(Object.entries(refs)) });
   return { case: applied, outcome: "applied" };
 }
 
