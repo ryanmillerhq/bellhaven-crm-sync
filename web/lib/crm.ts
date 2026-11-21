@@ -27,11 +27,11 @@ function unwrap(body: unknown): Record<string, unknown> {
 
 /** Real HTTP client. Server-only: the token never leaves the server. */
 export class HttpCrmClient implements CrmClient {
-  constructor(private readonly baseUrl: string, private readonly token: string) {
-    if (!token) throw new CrmError("CRM_API_TOKEN is not set");
-  }
+  constructor(private readonly baseUrl: string, private readonly token: string) {}
 
   private async call(method: string, path: string, body?: unknown): Promise<unknown> {
+    // Fail on use, not construction: pages that only read the review store still work without a CRM token.
+    if (!this.token) throw new CrmError("CRM_API_TOKEN is not set");
     const res = await fetch(this.baseUrl.replace(/\/$/, "") + path, {
       method,
       headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json", Accept: "application/json" },

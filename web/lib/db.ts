@@ -5,6 +5,11 @@ import type { Case, CaseEvent, CaseStatus, Run } from "./types";
 
 // One small pool per server instance. On Vercel each function instance holds at most a couple of connections,
 // which keeps us well inside the Supabase session pooler's limits.
+//
+// Transactions: every statement here is a single pool.query(), which autocommits and releases its client, so no
+// connection is ever left mid-transaction. The claim is one conditional UPDATE ... RETURNING (atomic on its own).
+// Claim + execute is intentionally NOT one DB transaction: it spans CRM HTTP calls, and holding a transaction (and a
+// pooler connection) open across external I/O is worse than the status machine + per-op result log we use instead.
 const g = globalThis as unknown as { __pgPool?: Pool };
 
 function pool(): Pool {
