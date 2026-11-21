@@ -80,3 +80,10 @@ def test_stale_case_no_longer_detected_is_superseded_too():
 def test_applied_case_proposed_again_is_counted_as_redetected():
     plan = plan_sync({"a": (1, "applied"), "b": (2, "rejected")}, [case("a"), case("b")])
     assert plan.applied_redetected == ["a"] and plan.counts()["applied_redetected"] == 1
+
+
+def test_unchanged_content_comparison_is_structural():
+    from pipeline.store import _same
+    assert _same([{"a": 1, "b": [2]}], [{"b": [2], "a": 1}])
+    assert _same(None, []) and _same("", None)
+    assert not _same([{"a": 1}], [{"a": 2}])

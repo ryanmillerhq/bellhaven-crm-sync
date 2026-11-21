@@ -11,6 +11,7 @@ The idempotency rules live in the pure function `plan_sync`, so they can be test
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 import psycopg
@@ -78,6 +79,12 @@ def plan_sync(existing: dict[str, tuple], proposed: list[dict], allow_supersede:
     if allow_supersede:
         plan.supersede = sorted((v[0], v[1]) for fp, v in existing.items() if v[1] in SUPERSEDABLE and fp not in seen)
     return plan
+
+
+def _same(stored, proposed) -> bool:
+    """Compare a stored column value with a freshly built one (JSON columns compared structurally)."""
+    norm = lambda v: json.dumps(v, sort_keys=True, default=str) if isinstance(v, (dict, list)) else v
+    return norm(stored) == norm(proposed) or (stored in (None, [], "") and proposed in (None, [], ""))
 
 
 def _db_value(col: str, value):
@@ -151,8 +158,12 @@ class Store:
             counts = plan.counts()
             for case_id, case, prev in plan.refresh:
                 # Guarded by the status the plan saw: if a reviewer claimed/applied it meanwhile, leave it alone.
-                if self._rewrite(case_id, case, run_id, new_status="pending", expect_status=prev):
+                outcome = self._rewrite(case_id, case, run_id, new_status="pending", expect_status=prev)
+                if outcome == "updated":
                     self._event(case_id, "refreshed", {"run_id": run_id, "previous_status": prev})
+                elif outcome == "unchanged":
+                    counts["refreshed"] -= 1
+                    counts["unchanged"] = counts.get("unchanged", 0) + 1
                 else:
                     counts["refreshed"] -= 1
                     counts["left_alone"] += 1
@@ -166,12 +177,18 @@ class Store:
                     self._event(case_id, "superseded", {"run_id": run_id, "reason": "no longer detected"})
         return counts
 
-    def _rewrite(self, case_id: int, case: dict, run_id: int, new_status: str, expect_status: str) -> bool:
+    def _rewrite(self, case_id: int, case: dict, run_id: int, new_status: str, expect_status: str) -> str | None:
+        # Unchanged content → don't touch the row. A write would bump updated_at, and the review app's version guard
+        # would then (correctly) refuse an approval the reviewer already has in flight for this same case.
+        if new_status == expect_status:
+            row = self.conn.execute(f"select {', '.join(CONTENT_COLUMNS)} from cases where id = %s", (case_id,)).fetchone()
+            if row and all(_same(row[c], case.get(c)) for c in CONTENT_COLUMNS):
+                return "unchanged"
         sets = ", ".join(f"{c} = %s" for c in CONTENT_COLUMNS)
         cur = self.conn.execute(
             f"update cases set {sets}, status = %s, last_seen_run = %s where id = %s and status = %s",
             [*(_db_value(c, case.get(c)) for c in CONTENT_COLUMNS), new_status, run_id, case_id, expect_status])
-        return cur.rowcount == 1
+        return "updated" if cur.rowcount == 1 else None
 
     def _event(self, case_id: int, event: str, detail: dict) -> None:
         self.conn.execute("insert into case_events (case_id, event, actor, via, detail) values (%s, %s, %s, %s, %s)",
