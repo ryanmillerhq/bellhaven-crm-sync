@@ -5,7 +5,11 @@ landing in the CRM browser. Polish doesn't matter; talking through the reasoning
 
 ## Before recording
 - `python -m pipeline run`: the queue should show **26 pending** (if it was already run today, expect 0 new / 26 refreshed).
-- Start the review app (`cd web && npm run dev`) and open http://localhost:3000. Enter your name at "Who's reviewing?".
+- Start the review app: `cd web && npx next dev -p 3210` (port 3000 is used by another local app), then open
+  http://localhost:3210 and enter your name at "Who's reviewing?".
+- **Warm-up, off camera:** approve **Bellhaven of Batavia** (a create) and **Bellhaven Rehabilitation & Nursing of
+  Grove City** (a rename) first. The CRM's POST/PATCH shapes can't be tested without a real write, so this confirms
+  both before recording. If either fails, the case shows the CRM's error and can be retried after a fix.
 - Open a second tab on the CRM browser (the app's "Open in CRM" links go there).
 - Recorder (Loom / OBS / Xbox Game Bar `Win+Alt+R`) set to capture the browser window plus the microphone.
 
