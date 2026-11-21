@@ -314,3 +314,9 @@ Can you please have an agent do one final pass to check the CRM/website data and
 ````text
 after this final-audit (if it comes back clean), good to submit? I already pasted the half page writeup.
 ````
+
+## Prompt 37 (2026-11-21 17:38 UTC-0400)
+
+````text
+nah, fine to keep the email in there
+````
