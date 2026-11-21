@@ -1,0 +1,9 @@
+[project]
+name = "bellhaven-crm-sync"
+version = "0.1.0"
+description = "Daily scrape → match → human-reviewed CRM sync for LTC facility ownership"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
