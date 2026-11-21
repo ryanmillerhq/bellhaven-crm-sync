@@ -1,0 +1,75 @@
+# Daily Bellhaven sync: scrape the website, match to the CRM, queue cases for human review.
+#
+# Safe to run any number of times:
+#   - The pipeline only READS the CRM. Writes happen in the review app, only after a human approves a case.
+#   - Cases are keyed by a fingerprint, so anything already approved or rejected is never proposed again.
+#   - `concurrency` plus an advisory lock in the store mean overlapping runs can't race.
+#
+# To make it live: add repo secrets CRM_API_TOKEN and DATABASE_URL (Settings → Secrets and variables → Actions).
+# Until then, the job skips with a notice instead of failing every day.
+#
+# Equivalent crontab entry on a plain server:
+#   0 6 * * *  cd /opt/bellhaven-crm-sync && .venv/bin/python -m pipeline run --trigger schedule >> logs/sync.log 2>&1
+
+name: Daily Bellhaven sync
+
+on:
+  schedule:
+    - cron: "0 11 * * *" # 11:00 UTC daily (6–7am US Eastern), so the queue is fresh before reviewers start
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: print the cases without saving them"
+        type: boolean
+        default: false
+
+concurrency:
+  group: bellhaven-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest # ships with Google Chrome; Selenium Manager fetches the matching driver
+    timeout-minutes: 20
+    steps:
+      - name: Check secrets are configured
+        id: secrets
+        env:
+          CRM_API_TOKEN: ${{ secrets.CRM_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$CRM_API_TOKEN" ] && [ -n "$DATABASE_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CRM_API_TOKEN / DATABASE_URL secrets not set; skipping the sync."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.configured == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        if: steps.secrets.outputs.configured == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Unit tests
+        if: steps.secrets.outputs.configured == 'true'
+        run: pytest -q
+
+      - name: Run pipeline (proposes only; never writes to the CRM)
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          CRM_API_TOKEN: ${{ secrets.CRM_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || 'ci' }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python -m pipeline run --trigger "$TRIGGER" $DRY_RUN
