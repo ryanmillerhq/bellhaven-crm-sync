@@ -83,7 +83,9 @@ class Store:
     def __init__(self, database_url: str):
         if not database_url:
             raise ValueError("DATABASE_URL is not set (add it to .env)")
-        self.conn = psycopg.connect(database_url, row_factory=dict_row, connect_timeout=20)
+        # autocommit=True: reads don't open a hidden transaction, so each `with conn.transaction()` below is a real
+        # transaction that commits on exit (otherwise they nest as savepoints and are rolled back on close).
+        self.conn = psycopg.connect(database_url, row_factory=dict_row, connect_timeout=20, autocommit=True)
 
     def close(self) -> None:
         self.conn.close()
