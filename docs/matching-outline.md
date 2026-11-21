@@ -188,3 +188,18 @@ Kettering survivor, a deterministic coin-flip that is now labeled as such in the
   synced; that's on the roadmap.
 - **Sandusky** gets an explanatory note on the Millstone account, since decision #7 keeps the old account
   untouched.
+
+**From the edge-case breaker (multi-day lifecycle):**
+- Refresh/reopen/supersede are guarded by the status the planner saw, so a run can't flip a case a reviewer just
+  claimed or applied back to pending. Stale cases are superseded too.
+- An approved change proposed again is counted as `applied_redetected`, a regression signal in the run summary.
+- Previously known communities that are no longer linked (Findlay's homepage notice rotating off) are probed by
+  direct URL, so a live community never looks "no longer listed".
+- PO Box accounts match on locality + identical name, so Ashtabula can't turn into create + unlisted if its phone
+  or administrator drifts.
+- Survivor order prefers the Active record. A survivor must still be unsettled at approval (preconditions).
+- Executor hardening (review app): per-operation precondition scoping on retry, idempotent create (adopts an
+  identical account found by street + zip), a 10-minute lease on `applying`, a content-version check so a refresh
+  during the Undo window can't swap operations, and reopen only for rejected or stale cases.
+- Known, accepted limits: one account claimed by two listings at one address, a slug rename re-keying a facility,
+  and unlisted → relisted → unlisted again staying suppressed by decision memory. None occur in today's data.
