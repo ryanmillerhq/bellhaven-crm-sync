@@ -73,3 +73,24 @@ equivalent crontab line.
 Built with Claude Code, directed by Ryan. Every prompt Ryan gave is in [docs/prompts-log.md](docs/prompts-log.md),
 word for word. The approach: plan first, review gates before core logic (the matching outline), an adversarial
 agent review of the matching logic, and tests run against the real data.
+
+## MCP server
+[mcp_server/](mcp_server/) is a local MCP server (official `mcp` SDK, FastMCP) so Claude Code or Claude Desktop can
+work the review queue. It calls the review app's own HTTP API, so an approval from Claude runs the same executor as
+the Approve button: preconditions re-checked against the live CRM, the same CHOW/duplicate steps, and an audit trail
+stamped with the reviewer and "via mcp". It never writes to the CRM itself.
+
+- **Use it:** start the review app (`cd web && npx next dev -p 3210`), then open Claude Code in the repo root.
+  [.mcp.json](.mcp.json) registers `bellhaven-review` (`.venv/Scripts/python -m mcp_server`, stdio). Then ask, e.g.,
+  "show me the next pending case and its evidence", and "approve it" once you've read it.
+- **Config (env):** `REVIEW_APP_URL` (default `http://localhost:3210`), `REVIEWER` (who is deciding; write tools
+  refuse without it), `REVIEW_PASSCODE` (only if the app has one). `.mcp.json` reads them from your shell and falls
+  back to a placeholder reviewer.
+- **Tools:** read: `get_progress`, `list_cases`, `get_case`, `search_crm`, `get_account`, `list_runs`. Write:
+  `approve_case` (writes to the real CRM), `reject_case`, `reopen_case`. Plus `run_pipeline` (dry run by default).
+- **Safety:** write tools are documented as needing your explicit confirmation, and Claude Code's per-tool permission
+  prompt is the final gate. `approve_case` sends the case's `updated_at`, so a case a pipeline run refreshed after
+  you read it is refused (409). Edits are limited to each step's editable fields.
+- **Claude Desktop:** add the same server block to `claude_desktop_config.json` with literal values, an absolute path
+  to `.venv/Scripts/python.exe`, and `PYTHONPATH` set to the repo root.
+- Tests: `pytest tests/test_mcp_server.py` (no network; the review app and the pipeline are mocked).
