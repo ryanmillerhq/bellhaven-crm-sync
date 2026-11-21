@@ -24,16 +24,37 @@ def secrets_from_env() -> list[str]:
     return found
 
 
+# System-injected messages (background-task notifications, etc.) arrive through the same
+# hook but are not prompts Ryan wrote, so they are skipped.
+SYSTEM_PREFIXES = ("<task-notification>", "<system-reminder>", "<cross-session-message", "<command-")
+
+
+def last_entry(text: str) -> tuple[int, int, str] | None:
+    """Return (start_index, end_index, prompt_text) of the final logged prompt, if any."""
+    matches = list(re.finditer(r"^## Prompt \d+[^\n]*\n\n(`{4,})text\n(.*?)\n\1\n", text, flags=re.M | re.S))
+    if not matches:
+        return None
+    m = matches[-1]
+    return m.start(), m.end(), m.group(2)
+
+
 def main() -> None:
     payload = json.loads(sys.stdin.buffer.read().decode("utf-8") or "{}")
     prompt = payload.get("prompt", "")
-    if not prompt.strip():
+    if not prompt.strip() or prompt.lstrip().startswith(SYSTEM_PREFIXES):
         return
     for secret in secrets_from_env():
         prompt = prompt.replace(secret, "[REDACTED_CRM_TOKEN]")
     prompt = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{16,}", r"\1[REDACTED]", prompt)
 
     existing = LOG.read_text(encoding="utf-8") if LOG.exists() else "# Prompt log\n"
+    prev = last_entry(existing)
+    if prev and prev[2] == prompt:
+        return  # same message submitted twice (e.g. queued mid-turn message delivered again)
+    if prev and len(prev[2]) > 40 and prompt.startswith(prev[2]):
+        # A queued message that was edited before delivery: keep only the final version.
+        existing = existing[: prev[0]].rstrip("\n") + "\n"
+        LOG.write_text(existing, encoding="utf-8", newline="\n")
     n = len(re.findall(r"^## Prompt \d+", existing, flags=re.M)) + 1
     stamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M UTC%z")
     fence = "````"
