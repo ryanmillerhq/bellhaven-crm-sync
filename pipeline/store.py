@@ -20,6 +20,7 @@ from psycopg.types.json import Jsonb
 DECIDED = {"applied", "rejected"}
 REFRESHABLE = {"pending", "stale"}
 LEAVE = {"applying", "failed"}
+SUPERSEDABLE = {"pending", "stale"}
 
 # Columns the pipeline owns (rewritten on refresh). Decision/result columns belong to the review app.
 CONTENT_COLUMNS = ("kind", "tags", "subject_key", "title", "summary", "reasoning", "location", "accounts",
@@ -33,13 +34,14 @@ class SyncPlan:
     refresh: list[tuple[int, dict, str]] = field(default_factory=list)  # (case id, case, previous status)
     reopen: list[tuple[int, dict]] = field(default_factory=list)
     skipped_decided: list[str] = field(default_factory=list)  # fingerprints
+    applied_redetected: list[str] = field(default_factory=list)  # subset of skipped_decided: a regression signal
     left_alone: list[str] = field(default_factory=list)
-    supersede: list[int] = field(default_factory=list)
+    supersede: list[tuple[int, str]] = field(default_factory=list)  # (case id, status it had)
 
     def counts(self) -> dict[str, int]:
         return {"new": len(self.insert), "refreshed": len(self.refresh), "reopened": len(self.reopen),
-                "skipped_decided": len(self.skipped_decided), "left_alone": len(self.left_alone),
-                "superseded": len(self.supersede)}
+                "skipped_decided": len(self.skipped_decided), "applied_redetected": len(self.applied_redetected),
+                "left_alone": len(self.left_alone), "superseded": len(self.supersede)}
 
 
 def plan_sync(existing: dict[str, tuple], proposed: list[dict], allow_supersede: bool = True) -> SyncPlan:
@@ -64,6 +66,9 @@ def plan_sync(existing: dict[str, tuple], proposed: list[dict], allow_supersede:
         case_id, status = existing[fp][:2]
         if status in DECIDED:
             plan.skipped_decided.append(fp)
+            if status == "applied":
+                # An approved change is being proposed again: the CRM drifted back (or didn't converge). Surface it.
+                plan.applied_redetected.append(fp)
         elif status in REFRESHABLE:
             plan.refresh.append((case_id, case, status))
         elif status == "superseded":
@@ -71,7 +76,7 @@ def plan_sync(existing: dict[str, tuple], proposed: list[dict], allow_supersede:
         else:  # applying / failed
             plan.left_alone.append(fp)
     if allow_supersede:
-        plan.supersede = sorted(v[0] for fp, v in existing.items() if v[1] == "pending" and fp not in seen)
+        plan.supersede = sorted((v[0], v[1]) for fp, v in existing.items() if v[1] in SUPERSEDABLE and fp not in seen)
     return plan
 
 
@@ -115,6 +120,12 @@ class Store:
         return self.conn.execute(
             "select subject_key, operations from cases where status in ('applied', 'rejected')").fetchall()
 
+    def last_good_slugs(self) -> list[str]:
+        row = self.conn.execute(
+            """select scrape_snapshot from runs where status = 'succeeded' and scrape_snapshot is not null
+               and coalesce((summary -> 'scrape' ->> 'complete')::boolean, false) order by id desc limit 1""").fetchone()
+        return [loc["slug"] for loc in (row["scrape_snapshot"] if row else []) or []]
+
     def last_good_location_count(self) -> int | None:
         row = self.conn.execute(
             """select location_count from runs where status = 'succeeded' and location_count is not null
@@ -134,23 +145,30 @@ class Store:
                     f"insert into cases ({', '.join(cols)}) values ({', '.join(['%s'] * len(cols))}) returning id",
                     vals).fetchone()
                 self._event(row["id"], "proposed", {"run_id": run_id})
+            counts = plan.counts()
             for case_id, case, prev in plan.refresh:
-                self._rewrite(case_id, case, run_id, new_status="pending")
-                self._event(case_id, "refreshed", {"run_id": run_id, "previous_status": prev})
+                # Guarded by the status the plan saw: if a reviewer claimed/applied it meanwhile, leave it alone.
+                if self._rewrite(case_id, case, run_id, new_status="pending", expect_status=prev):
+                    self._event(case_id, "refreshed", {"run_id": run_id, "previous_status": prev})
+                else:
+                    counts["refreshed"] -= 1
+                    counts["left_alone"] += 1
             for case_id, case in plan.reopen:
-                self._rewrite(case_id, case, run_id, new_status="pending")
-                self._event(case_id, "reopened", {"run_id": run_id, "reason": "issue detected again"})
-            for case_id in plan.supersede:
-                self.conn.execute("update cases set status = 'superseded' where id = %s and status = 'pending'",
-                                  (case_id,))
-                self._event(case_id, "superseded", {"run_id": run_id, "reason": "no longer detected"})
-        return plan.counts()
+                if self._rewrite(case_id, case, run_id, new_status="pending", expect_status="superseded"):
+                    self._event(case_id, "reopened", {"run_id": run_id, "reason": "issue detected again"})
+            for case_id, prev in plan.supersede:
+                cur = self.conn.execute("update cases set status = 'superseded' where id = %s and status = %s",
+                                        (case_id, prev))
+                if cur.rowcount:
+                    self._event(case_id, "superseded", {"run_id": run_id, "reason": "no longer detected"})
+        return counts
 
-    def _rewrite(self, case_id: int, case: dict, run_id: int, new_status: str) -> None:
+    def _rewrite(self, case_id: int, case: dict, run_id: int, new_status: str, expect_status: str) -> bool:
         sets = ", ".join(f"{c} = %s" for c in CONTENT_COLUMNS)
-        self.conn.execute(
-            f"update cases set {sets}, status = %s, last_seen_run = %s where id = %s",
-            [*(_db_value(c, case.get(c)) for c in CONTENT_COLUMNS), new_status, run_id, case_id])
+        cur = self.conn.execute(
+            f"update cases set {sets}, status = %s, last_seen_run = %s where id = %s and status = %s",
+            [*(_db_value(c, case.get(c)) for c in CONTENT_COLUMNS), new_status, run_id, case_id, expect_status])
+        return cur.rowcount == 1
 
     def _event(self, case_id: int, event: str, detail: dict) -> None:
         self.conn.execute("insert into case_events (case_id, event, actor, via, detail) values (%s, %s, %s, %s, %s)",
