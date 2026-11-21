@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "bellhaven-review": {
+      "type": "stdio",
+      "command": ".venv/Scripts/python",
+      "args": ["-m", "mcp_server"],
+      "env": {
+        "REVIEW_APP_URL": "${REVIEW_APP_URL:-http://localhost:3210}",
+        "REVIEWER": "${REVIEWER:-Ryan Miller (via Claude MCP)}",
+        "REVIEW_PASSCODE": "${REVIEW_PASSCODE:-}"
+      }
+    }
+  }
+}
