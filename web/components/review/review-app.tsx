@@ -71,6 +71,14 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
     [cases, kindFilter],
   );
 
+  // Switching back to a tab re-reads server state: picks up a sign-in/unlock done in another tab and keeps the
+  // progress counts current (decisions made elsewhere, or by the MCP server). Client-side edits/notes are kept.
+  useEffect(() => {
+    const onFocus = () => router.refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [router]);
+
   // Deep link: /?case=<id> opens that case directly (e.g. a demo shot list, or a link from Slack/MCP).
   useEffect(() => {
     const id = Number(new URLSearchParams(window.location.search).get("case"));
