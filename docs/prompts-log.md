@@ -101,3 +101,21 @@ ran that migration.
 ````text
 you can move the project instructions page to docs
 ````
+
+## Prompt 13 (2026-11-21 15:43 UTC-0400)
+
+````text
+all recommendations OK, go ahead with matching
+
+Let's soften the linkedin enriching to "internet profile enriching"
+
+can you whip up a quick adversarial agent team to review your matching logic?
+
+Then build, and let's get that actual run-through and 2 min video done!
+````
+
+## Prompt 14 (2026-11-21 15:47 UTC-0400)
+
+````text
+also, we should do audit tracking of which account/user was the one that performed each change/review decision
+````
