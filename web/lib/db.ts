@@ -1,6 +1,6 @@
 import "server-only";
 import { Pool } from "pg";
-import type { CaseStore, CaseFilter } from "./store";
+import type { CaseStore, CaseFilter, ClaimOptions } from "./store";
 import type { Case, CaseEvent, CaseStatus, Run } from "./types";
 
 // One small pool per server instance. On Vercel each function instance holds at most a couple of connections,
@@ -54,6 +54,20 @@ export class PgCaseStore implements CaseStore {
   async transition(id: number, from: CaseStatus[], to: CaseStatus) {
     const { rows } = await pool().query(
       `update public.cases set status = $3 where id = $1 and status = any($2) returning *`, [id, from, to]);
+    return rows[0] ? normalize(rows[0]) : null;
+  }
+
+  async claim(id: number, { leaseMs, expectedUpdatedAt }: ClaimOptions) {
+    // One atomic statement: pending/failed, or an 'applying' lease that expired (dead function), and, when given,
+    // exactly the version the reviewer saw. date_trunc: timestamptz has µs, the client's copy has ms.
+    const { rows } = await pool().query(
+      `update public.cases set status = 'applying'
+         where id = $1
+           and (status in ('pending', 'failed')
+                or (status = 'applying' and updated_at < now() - make_interval(secs => $2::double precision)))
+           and ($3::timestamptz is null or date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', $3::timestamptz))
+         returning *`,
+      [id, leaseMs / 1000, expectedUpdatedAt ?? null]);
     return rows[0] ? normalize(rows[0]) : null;
   }
 
