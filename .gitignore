@@ -1,0 +1,31 @@
+# --- secrets (repo is PUBLIC) ---
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+
+# --- exercise workspace page (personal workspace copy; kept out of the public repo) ---
+project-instructions-page.txt
+
+# --- local state ---
+data/*.db
+data/*.db-*
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# --- node / next ---
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- os ---
+.DS_Store
+Thumbs.db
