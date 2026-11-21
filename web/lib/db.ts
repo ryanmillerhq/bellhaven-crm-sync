@@ -16,10 +16,14 @@ function pool(): Pool {
   if (!g.__pgPool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL is not set (or use DATA_SOURCE=mock)");
+    // Use Supabase's transaction pooler (port 6543): it multiplexes many short-lived clients, which is what
+    // serverless needs. A frozen Vercel instance never runs idle timers, so keep each instance to one connection.
+    // node-postgres never uses named prepared statements unless asked, so transaction mode is safe here.
     g.__pgPool = new Pool({
       connectionString,
-      max: 3,
-      idleTimeoutMillis: 10_000,
+      max: process.env.VERCEL ? 1 : 3,
+      idleTimeoutMillis: 5_000,
+      allowExitOnIdle: true,
       connectionTimeoutMillis: 10_000,
       ssl: { rejectUnauthorized: false }, // Supabase pooler terminates TLS with its own chain
     });

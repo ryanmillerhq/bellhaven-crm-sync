@@ -90,7 +90,10 @@ class Store:
             raise ValueError("DATABASE_URL is not set (add it to .env)")
         # autocommit=True: reads don't open a hidden transaction, so each `with conn.transaction()` below is a real
         # transaction that commits on exit (otherwise they nest as savepoints and are rolled back on close).
-        self.conn = psycopg.connect(database_url, row_factory=dict_row, connect_timeout=20, autocommit=True)
+        # prepare_threshold=None: no server-side prepared statements, which Supabase's transaction pooler (port 6543,
+        # the right mode for serverless + CI) doesn't support. Harmless on a direct or session-mode connection.
+        self.conn = psycopg.connect(database_url, row_factory=dict_row, connect_timeout=20, autocommit=True,
+                                    prepare_threshold=None)
 
     def close(self) -> None:
         self.conn.close()
