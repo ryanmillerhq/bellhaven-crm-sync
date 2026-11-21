@@ -35,7 +35,30 @@ def cmd_scrape(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    from .run import run_pipeline
+
+    s = run_pipeline(trigger=args.trigger, dry_run=args.dry_run, scrape_file=args.scrape_file,
+                     headless=not args.headed)
+    sc = s["scrape"]
+    print(f"\nScrape: {sc['found_count']} communities (homepage claims {sc['claimed_count']}), "
+          f"complete={sc['complete']}" + (f", FAILED pages: {sc['failed']}" if sc["failed"] else ""))
+    print(f"CRM:    {s['accounts_read']} accounts, {s['contacts_read']} contacts read (read-only)")
+    print(f"\n{'KIND':10} {'TAGS':30} {'FACILITY':44} CONF   SUMMARY")
+    for c in s["cases"]:
+        print(f"{c['kind']:10} {','.join(c['tags'])[:30]:30} {c['title'][:44]:44} {c['confidence']:6} {c['summary'][:70]}")
+    kinds = ", ".join(f"{k} {v}" for k, v in sorted(s["cases_by_kind"].items()))
+    print(f"\n{s['case_count']} cases ({kinds}); {s['in_sync']} communities already in sync")
+    if args.dry_run:
+        print("Dry run: nothing saved.")
+    else:
+        print(f"Saved as run #{s['run_id']}. Queue changes: {s['store']}. Queue now: {s['queue']}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252
     parser = argparse.ArgumentParser(prog="python -m pipeline", description="Bellhaven CRM Sync pipeline")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -44,6 +67,13 @@ def main(argv: list[str] | None = None) -> int:
     p_scrape.add_argument("--out", help="also write the scrape to this JSON file")
     p_scrape.add_argument("--headed", action="store_true", help="show the browser window")
     p_scrape.set_defaults(func=cmd_scrape)
+
+    p_run = sub.add_parser("run", help="full run: scrape, read CRM, match, queue cases for review")
+    p_run.add_argument("--dry-run", action="store_true", help="print the cases without saving them")
+    p_run.add_argument("--trigger", choices=["manual", "schedule", "ci"], default="manual")
+    p_run.add_argument("--scrape-file", help="reuse a saved scrape JSON instead of scraping live")
+    p_run.add_argument("--headed", action="store_true", help="show the browser window")
+    p_run.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,

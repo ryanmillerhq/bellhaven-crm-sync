@@ -34,7 +34,20 @@ class ScrapeReport:
     found_count: int
     pages_visited: int
     homepage_only: list[str]  # slugs linked from the homepage but missing from the directory
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)  # worth a look, but the scrape is still usable
+    failed: list[str] = field(default_factory=list)  # detail pages that could not be read
+
+    @property
+    def complete(self) -> bool:
+        """Safe to conclude 'not on the website' from absence? Only if every page loaded and the count adds up."""
+        return (self.found_count > 0 and not self.failed
+                and (self.claimed_count is None or self.found_count >= self.claimed_count))
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {**asdict(self), "complete": self.complete}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ScrapeReport":
+        return cls(**{k: d.get(k) for k in ("claimed_count", "directory_count", "found_count", "pages_visited",
+                                            "homepage_only")}, warnings=d.get("warnings") or [],
+                   failed=d.get("failed") or [])

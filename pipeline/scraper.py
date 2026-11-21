@@ -150,11 +150,12 @@ class BellhavenScraper:
 
         locations: list[Location] = []
         warnings: list[str] = []
+        failed: list[str] = []
         for slug, url in urls.items():
             try:
                 loc = self.detail(slug, url)
             except Exception as exc:  # keep going; one bad page shouldn't sink the run
-                warnings.append(f"{slug}: {exc}")
+                failed.append(f"{slug}: {exc}")
                 log.exception("failed to scrape %s", url)
                 continue
             loc.found_on = sources[slug]
@@ -171,7 +172,7 @@ class BellhavenScraper:
             warnings.append(f"{len(homepage_only)} communit{'y is' if len(homepage_only) == 1 else 'ies are'} "
                             f"linked only from the homepage, not the directory: {', '.join(homepage_only)}")
         report = ScrapeReport(claimed_count=claimed, directory_count=listed, found_count=len(locations),
-                              pages_visited=pages, homepage_only=homepage_only, warnings=warnings)
+                              pages_visited=pages, homepage_only=homepage_only, warnings=warnings, failed=failed)
         return locations, report
 
 
