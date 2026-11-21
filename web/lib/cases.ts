@@ -11,6 +11,7 @@ import { PgCaseStore } from "./db";
 import { approveCase, rejectCase, reopenCase, type ExecDeps } from "./executor";
 import { buildMockCases, buildMockEvents, buildMockRuns, snapshotAccounts, snapshotContacts } from "./mock/cases";
 import { FakeCrm } from "./mock/fake-crm";
+import { computeProgress } from "./progress";
 import { MemoryCaseStore, type CaseFilter } from "./store";
 import type { Actor, Case, CaseEvent, CrmAccount, CrmContact, Edits, Progress, Run } from "./types";
 
@@ -49,21 +50,6 @@ export const listCases = (filter?: CaseFilter) => deps().store.list(filter);
 export async function getCase(id: number): Promise<(Case & { events: CaseEvent[] }) | null> {
   const c = await deps().store.get(id);
   return c ? { ...c, events: await deps().store.events(id) } : null;
-}
-
-export function computeProgress(cases: Case[]): Progress {
-  const live = cases.filter((c) => c.status !== "superseded");
-  const byKind: Progress["byKind"] = {};
-  for (const c of live) {
-    const k = (byKind[c.kind] ??= { total: 0, decided: 0 });
-    k.total++;
-    if (c.status === "applied" || c.status === "rejected") k.decided++;
-  }
-  const count = (...s: Case["status"][]) => live.filter((c) => s.includes(c.status)).length;
-  return {
-    total: live.length, decided: count("applied", "rejected"), pending: count("pending"), applied: count("applied"),
-    rejected: count("rejected"), attention: count("failed", "stale", "applying"), byKind,
-  };
 }
 
 export async function getProgress() {
