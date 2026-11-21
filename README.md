@@ -7,6 +7,9 @@ Keeps facility → parent-company ownership accurate in a CRM. A daily pipeline 
 
 Built for the Clipboard Health Sales Operations Analyst exercise ([original instructions](docs/project-instructions-page.txt)).
 
+**Live review app:** https://bellhaven-crm-sync.vercel.app. Anyone can browse the cases, evidence, audit trail and
+in-sync list; approving or rejecting requires a passcode (the CRM token never reaches the browser).
+
 ```
  website ──► Selenium scraper ─┐
                                ├─► matcher ─► case builder ─► review store (Supabase) ─► review app ─► CRM API
