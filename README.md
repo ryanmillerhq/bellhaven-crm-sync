@@ -53,7 +53,9 @@ cp .env.example .env                                 # add CRM_API_TOKEN and DAT
 python -m pipeline scrape                            # scrape only, print the 35 communities
 python -m pipeline run --dry-run                     # full match, print the cases, save nothing
 python -m pipeline run                               # save cases to the review store
-pytest                                               # 55 tests: parsers, matching, SOP table, idempotency, lifecycle
+pytest                                               # 87 tests: parsers, matching, SOP table, idempotency, lifecycle, MCP
+cd web && npx vitest run                             # 27 tests: executor, audit identity, hardening, API routes
+python -m pipeline verify [--write]                  # end state: diff vs before-snapshot, pointer invariants, convergence
 ```
 Database: run [db/migrations/](db/migrations/) in the Supabase SQL editor once.
 Daily schedule: [.github/workflows/daily-sync.yml](.github/workflows/daily-sync.yml), which also has the

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from .crm import ReadOnlyCRM
 from .match import find_operator_id, match
 from .proposals import build_cases, decided_keys_from_cases
 from .run import load_scrape
+
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
 TRACKED = ["name", "parent_name", "billing_street", "billing_city", "billing_state", "billing_zip", "care_type",
            "status", "duplicate_of_account", "chow_current_account"]
@@ -86,7 +89,9 @@ def verify(write: bool = False, scrape_file: str | None = None) -> dict:
     if write:
         out = REPO_ROOT / "data/crm-snapshot-after"
         out.mkdir(parents=True, exist_ok=True)
-        (out / "accounts.json").write_text(json.dumps(accounts, indent=1) + "\n", encoding="utf-8")
+        # The repo is public: reviewer emails typed into "Who's reviewing?" end up in approval notes; redact them.
+        public = [{**a, "note": _EMAIL.sub("[email redacted]", a.get("note") or "")} for a in accounts]
+        (out / "accounts.json").write_text(json.dumps(public, indent=1) + "\n", encoding="utf-8")
         (out / "contacts.json").write_text(json.dumps(contacts, indent=1) + "\n", encoding="utf-8")
         _write_markdown(report, REPO_ROOT / "docs/end-state.md")
     return report
