@@ -185,3 +185,102 @@ i did the warm up
   - **Stale README line:** the README's existing "55 tests" line is out of date (it's now 87). I left it alone because I was only appending a section.
 </agent-message>
 ````
+
+## Prompt 19 (2026-11-21 16:43 UTC-0400)
+
+````text
+[Image #1]
+
+Is this what you want me to change in vercel?
+````
+
+## Prompt 20 (2026-11-21 16:45 UTC-0400)
+
+````text
+deployed.
+````
+
+## Prompt 21 (2026-11-21 16:47 UTC-0400)
+
+````text
+should i demo the mcp too? How?
+````
+
+## Prompt 22 (2026-11-21 16:47 UTC-0400)
+
+````text
+should i demo the fact that it's hosted on vercel and supabase?
+````
+
+## Prompt 23 (2026-11-21 16:48 UTC-0400)
+
+````text
+"
+
+<pasted_content id="666f">
+Can't reach the review store
+(EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15
+
+Set DATABASE_URL and CRM_API_TOKEN, or run with DATA_SOURCE=mock to try the app on the real snapshot with a fake CRM.
+</pasted_content id="666f">
+
+"
+````
+
+## Prompt 24 (2026-11-21 16:50 UTC-0400)
+
+````text
+please give me the step-by-step to demo in this chat when we you are ready, I'm ready to record.
+````
+
+## Prompt 25 (2026-11-21 16:58 UTC-0400)
+
+````text
+I'm getting this on tab 5: Unlock the review app with the passcode to open CRM records.
+````
+
+## Prompt 26 (2026-11-21 17:02 UTC-0400)
+
+````text
+for tab 5, the chow field is empty, is that expected?
+````
+
+## Prompt 27 (2026-11-21 17:09 UTC-0400)
+
+````text
+grrr, I got 2 done but spent too ong, so the 2 min was done, I need to be more efficient. Any way I can roll back what I've done? Or maybe just build me a new set of tabs, maybe only 3, 5 is a TON to review and explain within 2 min
+````
+
+## Prompt 28 (2026-11-21 17:10 UTC-0400)
+
+````text
+also, it was demanding I sign in as a reviewer on every new tab...
+````
+
+## Prompt 29 (2026-11-21 17:17 UTC-0400)
+
+````text
+recorded it, approving the rest now
+
+Any others I need to reject, or can i just approve all of them?
+````
+
+## Prompt 30 (2026-11-21 17:18 UTC-0400)
+
+````text
+should i be inputting any note or anything else, like those ones that are no longer on the website?
+````
+
+## Prompt 31 (2026-11-21 17:19 UTC-0400)
+
+````text
+all approved, queue is at 0
+````
+
+## Prompt 32 (2026-11-21 17:22 UTC-0400)
+
+````text
+all 8 re-approved, history shows applied
+
+You don't need to cite lordicon.com at the bottom cause I pay the license, right?
+````
