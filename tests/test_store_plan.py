@@ -62,3 +62,11 @@ def test_new_change_for_same_facility_gets_new_case_even_after_rejection():
     # A rejected rename to "X" doesn't block a later, different rename to "Y" (different fingerprint).
     plan = plan_sync({"site:foo|rename|X": (1, "rejected")}, [case("site:foo|rename|Y")])
     assert [c["fingerprint"] for c in plan.insert] == ["site:foo|rename|Y"]
+
+
+def test_new_proposal_for_a_busy_facility_is_held():
+    # Tiffin's CHOW failed half-way (new account created, link not written): don't propose a different case for it.
+    existing = {"old-fp": (7, "failed", "site:bellhaven-of-tiffin")}
+    new_case = {"fingerprint": "different-fp", "subject_key": "site:bellhaven-of-tiffin", "kind": "duplicate"}
+    plan = plan_sync(existing, [new_case])
+    assert plan.insert == [] and plan.left_alone == ["different-fp"]

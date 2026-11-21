@@ -58,6 +58,7 @@ EXPECTED = {
     "Bellhaven at Sycamore Ridge": "rename", "Bellhaven of Batavia": "create", "Bellhaven of Carlisle": "create",
     "Bellhaven at Union Square": "create", "Amberly Manor": "create",
     "Bellhaven Care Center of Alliance": "unlisted", "Bellhaven of Coldwater": "unlisted",
+    "Bellhaven of Ashtabula": "field_fix",  # optional PO Box case (policy default: keep -> reject)
 }
 
 
@@ -123,12 +124,13 @@ def test_lookalikes_are_not_matched(first_run):
     assert cases["Bellhaven at Union Square"]["kind"] == "create"
 
 
-def test_phone_and_po_box_are_never_written(first_run):
-    for c in first_run[0].values():
+def test_phone_is_never_written_and_po_box_is_only_an_optional_case(first_run):
+    for title, c in first_run[0].items():
         for op in c["operations"]:
             if op["op"] == "update_account":
                 assert "phone" not in op["fields"]
-                assert "billing_street" not in op["fields"] or op["account_id"] != "001NXP9X46CWEPSLSV"
+                if op["account_id"] == "001NXP9X46CWEPSLSV":
+                    assert "optional" in c["tags"] and c["confidence"] == "low"
 
 
 def test_portsmouth_fixes_only_the_zip(first_run):
@@ -167,3 +169,71 @@ def test_incomplete_scrape_disables_the_unlisted_sweep(crm):
     locations, accounts, contacts = crm
     cases, _ = run(locations[:-5], accounts, contacts, complete=False)
     assert not any(c["kind"] in ("unlisted", "sold") for c in cases)
+
+
+# ---------- adversarial-review fixes ----------
+def _decided(cases, *titles):
+    from pipeline.proposals import decided_keys_from_cases
+    return decided_keys_from_cases([c for c in cases if c["title"] in titles])
+
+
+def test_rejected_po_box_case_is_not_reproposed(crm):
+    locations, accounts, contacts = crm
+    cases, _ = run(locations, accounts, contacts)
+    po = [c for c in cases if "po_box" in c["tags"]]
+    again, _ = build_cases(match(locations, accounts, contacts), "2026-11-22", True,
+                           decided=_decided(po, "Bellhaven of Ashtabula"))
+    assert not any("po_box" in c["tags"] for c in again)
+
+
+def test_reviewer_edit_before_approval_is_not_reproposed(crm):
+    locations, accounts, contacts = crm
+    cases, _ = run(locations, accounts, contacts)
+    zan = next(c for c in cases if c["title"] == "Bellhaven of Zanesville")
+    edited = {**zan, "operations": [
+        {**op, "fields": {**op["fields"], "name": "Bellhaven Zanesville (edited)"}} if op["op"] == "update_account" else op
+        for op in zan["operations"]]}
+    apply_case(edited, accounts, contacts)  # executor writes the reviewer's edited name
+    again, _ = build_cases(match(locations, accounts, contacts), "2026-11-22", True,
+                           decided=_decided(cases, "Bellhaven of Zanesville"))
+    assert "Bellhaven of Zanesville" not in {c["title"] for c in again}
+
+
+def test_billing_duplicate_under_old_parent_is_linked_not_inactivated(crm):
+    locations, accounts, contacts = crm
+    accounts.append({"account_id": "001TESTPREDECESS0", "name": "Cedar Trail Gardens of Monroe",
+                     "parent_id": "001FWSQ30SFW6S7604", "parent_name": "Cedar Trail Communities (Parent Account)",
+                     "billing_street": "750 Stewart Rd", "billing_city": "Monroe", "billing_state": "MI",
+                     "billing_zip": "48162", "care_type": "Assisted Living", "status": "Active", "phone": "",
+                     "lifetime_revenue": 50000, "outstanding_ar": 2500, "duplicate_of_account": "",
+                     "chow_current_account": "", "note": ""})
+    cases, _ = run(locations, accounts, contacts)
+    monroe = next(c for c in cases if c["title"] == "Bellhaven Gardens of Monroe")
+    ops = {op["account_id"]: op["fields"] for op in monroe["operations"] if op["op"] == "update_account"}
+    assert ops["001TESTPREDECESS0"] == {"chow_current_account": "001U1750VLVJAGG1S5"}
+    assert monroe["kind"] == "chow" and "duplicate" in monroe["tags"]
+
+
+def test_sold_with_revenue_but_no_ar_reparents_per_sop(crm):
+    locations, accounts, contacts = crm
+    next(a for a in accounts if a["account_id"] == "001SXSF4ELF0Z2LGDM")["outstanding_ar"] = 0
+    cases, _ = run(locations, accounts, contacts)
+    c = next(c for c in cases if c["title"] == "Bellhaven of Sandusky")
+    assert c["tags"] == ["sold", "reparent", "duplicate"] and c["sop"]["branch"] == "reparent"
+    ups = {op["account_id"]: op["fields"] for op in c["operations"] if op["op"] == "update_account"}
+    assert ups["001SXSF4ELF0Z2LGDM"] == {"parent_id": "001YRHHXQ5HJ0TCL2U"}
+    assert ups["0017JP8Z1UQ763BVK3"] == {"duplicate_of_account": "001SXSF4ELF0Z2LGDM", "status": "Inactive"}
+
+
+def test_chow_never_touches_the_old_account_beyond_the_link(first_run):
+    for title in ("Bellhaven of Tiffin", "Bellhaven of Marietta"):
+        c = first_run[0][title]
+        old = next(a for a in c["accounts"] if a["role"] == "old_record")["account"]["account_id"]
+        touching = [op for op in c["operations"] if op.get("account_id") == old]
+        assert [op["fields"] for op in touching] == [{"chow_current_account": {"$ref": "new"}}]
+
+
+def test_in_sync_rows_flag_stale_administrator_contacts(first_run):
+    _, results, _ = first_run
+    wooster = next(r for r in results if r["name"] == "Bellhaven of Wooster")
+    assert wooster["classification"] == "in_sync" and "Lorna Sorensen" in wooster["notes"][0]
