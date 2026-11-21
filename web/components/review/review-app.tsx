@@ -307,8 +307,6 @@ export function ReviewApp({ data, canAct, passcodeRequired, reviewer, crmLinks }
 
       <footer className="mx-auto max-w-7xl px-4 pb-8 pt-2 text-center text-xs text-muted-foreground sm:px-6">
         Nothing is written to the CRM without an approval, and every decision is signed by its reviewer.
-        {" · "}
-        <a href="https://lordicon.com/" target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">Icons by Lordicon.com</a>
       </footer>
 
       <ReviewerDialog key={reviewer?.label ?? "anon"} open={whoOpen} onOpenChange={setWhoOpen} reviewer={reviewer}
