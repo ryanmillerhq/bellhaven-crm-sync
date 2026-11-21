@@ -276,3 +276,18 @@ def test_survivor_prefers_active_record(crm):
 def test_survivor_of_duplicates_must_still_be_unsettled_at_approval(first_run):
     c = first_run[0]["Bellhaven of Port Clinton"]
     assert {"account_id": "001UELXDAKFRKB8932", "field": "duplicate_of_account", "equals": ""} in c["preconditions"]
+
+
+def test_simulated_end_state_is_consistent(crm):
+    import copy
+    from pipeline.verify import diff_accounts, invariants
+    locations, accounts, contacts = crm
+    before = copy.deepcopy(accounts)
+    cases, _ = run(locations, accounts, contacts)
+    for c in cases:
+        if "optional" not in c["tags"]:  # the PO Box case is the planned rejection
+            apply_case(c, accounts, contacts)
+    created, changed = diff_accounts(before, accounts)
+    assert len(created) == 6 and invariants(accounts) == []
+    op = BELLHAVEN
+    assert sum(1 for a in accounts if a.get("parent_id") == op and a["status"] == "Active") == 36  # 35 + Sandusky (CHOW'd)

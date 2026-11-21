@@ -56,6 +56,25 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    from .verify import verify
+
+    r = verify(write=args.write)
+    print(f"Created accounts: {len(r['created'])}")
+    for a in r["created"]:
+        print(f"  + {a['account_id']} {a['name']} ({a.get('parent_name', '')})")
+    print(f"Changed accounts: {len(r['changed'])}")
+    for c in r["changed"]:
+        print(f"  ~ {c['account_id']} {c['name']}: " + "; ".join(f"{f} {o!r}→{n!r}" for f, (o, n) in c["fields"].items())
+              + (" (+note)" if c["note_added"] else ""))
+    print(f"Invariant problems: {r['invariant_problems'] or 'none'}")
+    print(f"Undecided cases remaining: {r['undecided_cases_remaining'] or 'none'} | in sync: {r['in_sync']} | "
+          f"rejected/decided-not-applied: {r['decided_not_applied']} | Bellhaven children: {r['operator_children']}")
+    if args.write:
+        print("wrote data/crm-snapshot-after/ and docs/end-state.md")
+    return 0 if not r["invariant_problems"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252
@@ -74,6 +93,10 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--scrape-file", help="reuse a saved scrape JSON instead of scraping live")
     p_run.add_argument("--headed", action="store_true", help="show the browser window")
     p_run.set_defaults(func=cmd_run)
+
+    p_verify = sub.add_parser("verify", help="diff the live CRM against the before-snapshot and check consistency")
+    p_verify.add_argument("--write", action="store_true", help="save data/crm-snapshot-after/ and docs/end-state.md")
+    p_verify.set_defaults(func=cmd_verify)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
