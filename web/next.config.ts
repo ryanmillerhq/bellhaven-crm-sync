@@ -4,7 +4,8 @@ import type { NextConfig } from "next";
 
 // One .env at the repo root serves both the Python pipeline and this app locally.
 // On Vercel there is no .env file; variables come from the project settings instead.
-loadEnvConfig(path.resolve(process.cwd(), ".."));
+// forceReload: Next has already loaded (and cached) env for web/ itself, so without it this call is a no-op.
+loadEnvConfig(path.resolve(process.cwd(), ".."), process.env.NODE_ENV !== "production", { info: () => {}, error: console.error }, true);
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,

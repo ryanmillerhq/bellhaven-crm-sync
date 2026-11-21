@@ -122,7 +122,7 @@ export function CaseView(p: CaseViewProps) {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <input
             value={p.note} onChange={(e) => p.onNote(e.target.value)} disabled={!p.canAct}
-            placeholder={p.canAct ? "Decision note (optional): saved with your approval or rejection" : "Unlock with the passcode to decide"}
+            placeholder={p.canAct ? "Decision note (optional): saved with your approval or rejection" : "Click “Who's reviewing?” (top right) to start deciding"}
             className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none transition-[border-color,box-shadow] focus:border-primary focus:ring-3 focus:ring-primary/20 disabled:opacity-60"
           />
           <div className="flex items-center gap-2">
