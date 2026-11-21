@@ -44,3 +44,17 @@ Recommended decisions (I pre-checked every case against the data; the adversaria
 
 After approving: `python -m pipeline run` again should report **0 new** cases, and everything decided stays
 decided. Then check the end state: `python -m pipeline verify` (diff of the CRM against the expected outcomes).
+
+## Optional: MCP demo (~60s clip, or the live walkthrough)
+1. Keep the review app running at http://localhost:3210.
+2. New terminal: `cd C:\clipboard-takehome-project` then `claude`. Approve the project MCP server
+   **bellhaven-review** when asked, then run `/mcp` to confirm it's connected (10 tools). Use the **default
+   permission mode**, so every write shows a permission prompt: that prompt is the human approval.
+3. Ask:
+   - "What's left in the Bellhaven review queue?" → `get_progress` / `list_cases`
+   - "Walk me through the Owosso case. Do you agree with the survivor choice?" → `get_case`
+   - "Approve it." → `approve_case` → **you confirm the permission prompt**
+   - (optional) "Do a dry run of the pipeline." → `run_pipeline` (dry run: nothing saved, nothing written)
+4. Browser → **History**: "Approved by Ryan Miller (via Claude MCP) · via MCP". Then open the record in the CRM.
+
+Use a case that hasn't been approved yet (Owosso, `?case=68`), and do this before approving the rest in the UI.
