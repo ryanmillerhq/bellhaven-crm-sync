@@ -24,12 +24,12 @@ def test_second_identical_run_creates_nothing_new():
     existing = {c["fingerprint"]: (i, "pending") for i, c in enumerate(first.insert, 1)}
     second = plan_sync(existing, [case("a"), case("b")])
     assert second.counts() == {"new": 0, "refreshed": 2, "reopened": 0, "skipped_decided": 0,
-                               "left_alone": 0, "superseded": 0}
+                               "applied_redetected": 0, "left_alone": 0, "superseded": 0}
 
 
 def test_pending_case_no_longer_detected_is_superseded():
     plan = plan_sync({"a": (1, "pending"), "b": (2, "pending")}, [case("a")])
-    assert plan.supersede == [2]
+    assert plan.supersede == [(2, "pending")]
 
 
 def test_decided_cases_are_not_superseded_when_absent():
@@ -70,3 +70,13 @@ def test_new_proposal_for_a_busy_facility_is_held():
     new_case = {"fingerprint": "different-fp", "subject_key": "site:bellhaven-of-tiffin", "kind": "duplicate"}
     plan = plan_sync(existing, [new_case])
     assert plan.insert == [] and plan.left_alone == ["different-fp"]
+
+
+def test_stale_case_no_longer_detected_is_superseded_too():
+    plan = plan_sync({"a": (1, "stale")}, [])
+    assert plan.supersede == [(1, "stale")]
+
+
+def test_applied_case_proposed_again_is_counted_as_redetected():
+    plan = plan_sync({"a": (1, "applied"), "b": (2, "rejected")}, [case("a"), case("b")])
+    assert plan.applied_redetected == ["a"] and plan.counts()["applied_redetected"] == 1

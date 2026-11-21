@@ -237,3 +237,42 @@ def test_in_sync_rows_flag_stale_administrator_contacts(first_run):
     _, results, _ = first_run
     wooster = next(r for r in results if r["name"] == "Bellhaven of Wooster")
     assert wooster["classification"] == "in_sync" and "Lorna Sorensen" in wooster["notes"][0]
+
+
+# ---------- red-team (breaker) scenarios ----------
+def test_po_box_account_still_matches_when_phone_and_admin_drift(crm):
+    locations, accounts, contacts = crm
+    ash = next(a for a in accounts if a["account_id"] == "001NXP9X46CWEPSLSV")
+    ash["phone"] = "(000) 000-0000"
+    contacts[:] = [c for c in contacts if c["account_id"] != "001NXP9X46CWEPSLSV"]
+    cases, results = run(locations, accounts, contacts)
+    assert not any(c["kind"] in ("create", "unlisted") and "Ashtabula" in c["title"] for c in cases)
+    assert next(r for r in results if r["name"] == "Bellhaven of Ashtabula")["account_id"] == "001NXP9X46CWEPSLSV"
+
+
+def test_create_fingerprint_ignores_website_phone_changes(crm):
+    import dataclasses
+    locations, accounts, contacts = crm
+    a, _ = run(locations, accounts, contacts)
+    changed = [dataclasses.replace(l, phone="(999) 999-9999") if l.slug == "bellhaven-of-batavia" else l for l in locations]
+    b, _ = run(changed, accounts, contacts)
+    fp = lambda cs: next(c["fingerprint"] for c in cs if c["title"] == "Bellhaven of Batavia")
+    assert fp(a) == fp(b)
+
+
+def test_survivor_prefers_active_record(crm):
+    locations, accounts, contacts = crm
+    # Make the Bellhaven Erie record Inactive (but not a settled duplicate): the Harborview record is now preferred
+    # only if Bellhaven parentage didn't come first; parent rule still wins, so set both to Harborview-equivalent.
+    erie_b = next(a for a in accounts if a["account_id"] == "001CVBBCSDM7YHN220")
+    erie_h = next(a for a in accounts if a["account_id"] == "001BLYF02K97SZLZHH")
+    erie_h["parent_id"], erie_h["parent_name"] = erie_b["parent_id"], erie_b["parent_name"]
+    erie_b["status"] = "Inactive"
+    cases, _ = run(locations, accounts, contacts)
+    c = next(c for c in cases if c["title"] == "Bellhaven Shores of Erie")
+    assert next(a for a in c["accounts"] if a["role"] == "survivor")["account"]["account_id"] == "001BLYF02K97SZLZHH"
+
+
+def test_survivor_of_duplicates_must_still_be_unsettled_at_approval(first_run):
+    c = first_run[0]["Bellhaven of Port Clinton"]
+    assert {"account_id": "001UELXDAKFRKB8932", "field": "duplicate_of_account", "equals": ""} in c["preconditions"]
