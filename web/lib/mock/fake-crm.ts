@@ -46,6 +46,14 @@ export class FakeCrm implements CrmClient {
       .map((a) => structuredClone(a));
   }
 
+  async findAccounts(filter: { street?: string; zip?: string; q?: string }) {
+    this.record({ method: "GET", path: `/accounts?${new URLSearchParams(filter as Record<string, string>)}` });
+    const has = (v: unknown, needle?: string) => !needle || String(v ?? "").toLowerCase().includes(needle.toLowerCase());
+    return [...this.accounts.values()]
+      .filter((a) => has(a.billing_street, filter.street) && (!filter.zip || a.billing_zip === filter.zip) && has(a.name, filter.q))
+      .map((a) => structuredClone(a));
+  }
+
   async listContacts(accountId: string) {
     this.record({ method: "GET", path: `/contacts?account_id=${accountId}` });
     return [...this.contacts.values()].filter((c) => c.account_id === accountId).map((c) => structuredClone(c));

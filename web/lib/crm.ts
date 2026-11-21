@@ -5,6 +5,8 @@ import type { CrmAccount, CrmContact } from "./types";
 export interface CrmClient {
   getAccount(id: string): Promise<CrmAccount>;
   searchAccounts(q: string): Promise<CrmAccount[]>;
+  /** List endpoint filters (the API supports street / zip / q); used to make creates idempotent. */
+  findAccounts(filter: { street?: string; zip?: string; q?: string }): Promise<CrmAccount[]>;
   listContacts(accountId: string): Promise<CrmContact[]>;
   createAccount(fields: Record<string, unknown>): Promise<{ id: string; response: unknown }>;
   updateAccount(id: string, fields: Record<string, unknown>): Promise<unknown>;
@@ -52,6 +54,13 @@ export class HttpCrmClient implements CrmClient {
 
   async searchAccounts(q: string): Promise<CrmAccount[]> {
     const body = (await this.call("GET", `/accounts?q=${encodeURIComponent(q)}&page_size=50`)) as { data?: CrmAccount[] };
+    return body?.data ?? [];
+  }
+
+  async findAccounts(filter: { street?: string; zip?: string; q?: string }): Promise<CrmAccount[]> {
+    const params = new URLSearchParams({ page_size: "100" });
+    for (const [k, v] of Object.entries(filter)) if (v) params.set(k, v);
+    const body = (await this.call("GET", `/accounts?${params}`)) as { data?: CrmAccount[] };
     return body?.data ?? [];
   }
 

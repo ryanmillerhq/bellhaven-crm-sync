@@ -87,6 +87,8 @@ export interface OperationResult {
   /** Who ran this step and through which surface. The CRM only sees one shared token, so this is the record. */
   actor: string; via: "ui" | "mcp";
   response?: unknown; created_id?: string; error?: string;
+  /** create_account found an identical existing account and used it instead of creating a duplicate. */
+  adopted?: boolean;
 }
 
 export interface Case {
